@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RTO Tracker
 
-## Getting Started
+Personal return-to-office attendance record. Stamp the weekdays you were in the
+office; the app tracks whether you're meeting the 40% monthly requirement.
+Unmarked weekdays count as work from home; leaves and holidays are excluded
+from the computation.
 
-First, run the development server:
+Stack: Next.js (App Router) · Drizzle ORM · Neon Postgres · Auth.js v5
+(Google OAuth). See `docs/architecture.md` and `docs/decisions/` for design
+rationale, and `docs/plans/` for the build plan.
+
+## Setup
+
+### 1. Neon database
+
+1. Create a project at [console.neon.tech](https://console.neon.tech).
+2. Copy the connection string (Connect → Postgres).
+
+### 2. Google OAuth client
+
+1. In [Google Cloud Console](https://console.cloud.google.com), create (or
+   pick) a project → APIs & Services → Credentials → Create Credentials →
+   OAuth client ID → Web application.
+2. Add authorized redirect URI:
+   `http://localhost:3000/api/auth/callback/google`
+   (add your production URL later: `https://<your-domain>/api/auth/callback/google`)
+3. Copy the client ID and secret.
+
+### 3. Environment
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+npx auth secret   # fills AUTH_SECRET, or paste its output manually
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in `DATABASE_URL`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Create tables and run
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npx drizzle-kit push   # creates auth + day_entries tables in Neon
+npm run dev
+```
 
-## Learn More
+Open http://localhost:3000, sign in with Google, tap days.
 
-To learn more about Next.js, take a look at the following resources:
+## Verify
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+make test   # vitest unit tests (RTO computation)
+make lint   # eslint
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy (Vercel)
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push this repo to GitHub and import it in [vercel.com](https://vercel.com).
+2. Add environment variables in the Vercel project settings: `DATABASE_URL`,
+   `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`.
+3. Add the production redirect URI to the Google OAuth client:
+   `https://<your-vercel-domain>/api/auth/callback/google`
+4. Deploy. Auth.js infers the canonical URL from Vercel automatically.
