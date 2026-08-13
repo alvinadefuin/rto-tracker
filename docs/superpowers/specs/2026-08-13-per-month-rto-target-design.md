@@ -93,7 +93,17 @@ export function resolvePercent(monthKey: string, periods: TargetPeriod[]): numbe
 
 /** True when two periods share at least one month. */
 export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean;
+
+/** Months a closed period covers, inclusive. `null` when the period is ongoing. */
+export function countMonthsInPeriod(period: TargetPeriod): number | null;
 ```
+
+`countMonthsInPeriod` is integer arithmetic on the `YYYY-MM` parts —
+`(endYear * 12 + endMonth) - (startYear * 12 + startMonth) + 1` — so it constructs no
+`Date` and honours the same invariant as everything else here. It returns `null` rather
+than a number for an ongoing period, forcing the caller to handle the unbounded case
+explicitly instead of quietly rendering a wrong count. It exists for the delete
+confirmation copy.
 
 `periodsOverlap` is:
 
@@ -184,10 +194,38 @@ Interaction details, so these are not left to interpretation:
   shape — the client is not trusted, and the field can be bypassed.
 - **Edit is inline.** Activating Edit on a row replaces that row with a form over the
   same three fields plus Save and Cancel. At most one row is editable at a time.
-- **Delete acts immediately, with no confirmation step.** A period is three fields and
-  trivially re-entered, so a confirmation dialog costs more than the mistake does.
+- **Delete requires confirmation.** See "Deleting a period" below — the cost of a
+  mis-click is not re-typing three fields, it is silently rescoring every month the
+  period covered.
 
 `src/app/page.tsx` header gains a `Settings` link beside `Sign out`, styled to match.
+
+### Deleting a period
+
+Deleting is **not** a local edit. Removing a period means the months it covered no longer
+match anything, so `resolvePercent` returns `DEFAULT_RTO_PERCENT` for all of them. Every
+one of those months is rescored at 40%, and months that previously met a reduced target
+can flip back to unmet. Nothing warns the user after the fact — the calendar simply reads
+differently the next time they look.
+
+So delete is confirmed through a modal, and the modal **states the consequence rather
+than asking a generic "are you sure"**:
+
+> Delete the Jun 2022 – Dec 2023 period?
+> **19 months** will revert to the default 40% requirement.
+> [Cancel] [Delete period]
+
+- Built on the native `<dialog>` element — focus trapping, `Esc` to dismiss, and
+  backdrop rendering come for free, with no library and no focus-management code.
+- This requires a small client component (`DeletePeriodButton`) because
+  `settings/page.tsx` is a server component. It owns only the open/closed state and
+  submits to `deleteTargetPeriod`; the row itself stays server-rendered.
+- For an **ongoing** period the count is unbounded, so the wording changes to
+  "every month from Jun 2022 onward will revert to the default 40% requirement."
+- Cancel is the default focused action, so a stray `Enter` does not delete.
+
+The month count comes from a pure helper (see below), not from a query, so the dialog
+needs no extra round trip.
 
 ### Server actions
 
@@ -247,6 +285,12 @@ new dependencies, no DOM**, consistent with the documented convention.
 - one open-ended, starting before the other ends → true
 - one open-ended, starting after the other ends → false
 - both open-ended → true
+
+`countMonthsInPeriod`:
+- `2022-06` → `2023-12` → `19`, the case the delete dialog quotes
+- a single-month period (`2022-06` → `2022-06`) → `1`, not `0`
+- a period spanning a year boundary (`2022-11` → `2023-02`) → `4`
+- an ongoing period (`endMonth: null`) → `null`
 
 `computeMonthStats`:
 - 22 eligible days at 20% → `requiredDays === 5` (`ceil(4.4)`)
