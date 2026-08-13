@@ -1,0 +1,46 @@
+# Architecture
+
+Personal RTO (return-to-office) day tracker. Single-purpose web app: mark which
+weekdays you were in the office, see whether you're meeting the company's 40%
+monthly RTO requirement.
+
+## Stack
+
+- **Next.js (App Router, TypeScript)** — UI and API in one codebase, deployed on Vercel
+- **Neon Postgres** via **Drizzle ORM** (`@neondatabase/serverless` driver)
+- **Auth.js v5** with Google OAuth, Drizzle adapter, database sessions
+- **Vitest** for unit tests
+
+## Data model
+
+Auth.js standard tables (`users`, `accounts`, `sessions`, `verification_tokens`) plus:
+
+```
+day_entries
+  user_id  text  → users.id (cascade delete)
+  date     text  'YYYY-MM-DD'
+  status   enum  'office' | 'leave' | 'holiday'
+  PRIMARY KEY (user_id, date)
+```
+
+**Absence of a row on a weekday means WFH.** Weekends are never stored.
+
+## Computation rules
+
+All in `src/lib/rto.ts` as pure functions over `YYYY-MM-DD` strings (no Date
+parsing of strings — UTC component math only, to avoid timezone drift).
+
+- Eligible working days in a month = weekdays − holidays − leaves
+- Required office days = `ceil(0.4 × eligible)`
+- RTO % = office ÷ eligible (0 when eligible is 0)
+- Weekly breakdown: Mon–Fri chunks, partial chunks at month edges — informational
+  only; the 40% requirement is monthly.
+
+## Data flow
+
+Server component (`page.tsx`) authenticates via `auth()`, queries the month's
+entries for the session user, computes stats, renders. The calendar is a client
+component: tapping a weekday cycles WFH → Office → Leave → Holiday → WFH,
+updates optimistically, and persists via the `setDayStatus` server action
+(upsert, or delete when cycling back to WFH). On failure the cell reverts and a
+toast is shown.
