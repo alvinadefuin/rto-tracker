@@ -107,7 +107,16 @@ export default async function Home({
         </div>
       </header>
 
-      <Calendar year={year} month={month} initialEntries={entries} />
+      {/* Keyed by month: search-param navigation re-renders rather than
+          remounts, and Calendar seeds its state from initialEntries only on
+          mount. Without the key, sliding months keeps the previous month's
+          entries and the new month renders blank. */}
+      <Calendar
+        key={monthKey}
+        year={year}
+        month={month}
+        initialEntries={entries}
+      />
     </main>
   );
 }

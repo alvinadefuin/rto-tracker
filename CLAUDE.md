@@ -55,15 +55,23 @@ informational — the requirement is monthly.
 (`searchParams` is a Promise in this Next version — `await` it), queries `day_entries` for
 the session user, and hands a plain `Entries` map to `<Calendar>`.
 
+**`<Calendar>` must keep its `key={monthKey}`.** Next does not remount on search-param
+changes, and Calendar seeds its state from `initialEntries` only on mount — so without the
+key, sliding months keeps the previous month's entries and the new month renders blank.
+
 `src/components/calendar.tsx` (client) owns the interaction: tapping a weekday cycles
 `null → office → leave → holiday → null`, updates local state optimistically, and calls the
-`setDayStatus` server action. On rejection it reverts that cell and shows a toast — there is
-no refetch, so **the client recomputes stats from local state** with the same
-`computeMonthStats` the server would use. Keep that function pure and isomorphic.
+`setDayStatus` server action. On rejection it reverts that cell and shows a toast. The
+displayed month is never refetched mid-edit, so **the client recomputes stats from local
+state** with the same `computeMonthStats` the server would use. Keep that function pure and
+isomorphic.
 
 `src/app/actions.ts` re-validates everything server-side (session, date shape, weekend,
 status) — the client is not trusted. It upserts on the `(user_id, date)` primary key, or
-deletes for `null`.
+deletes for `null`, then calls `revalidatePath("/")`. That call is required, not cosmetic:
+the client cache reuses page payloads on browser back/forward, so without it an edit
+disappears from the render when you navigate back to its month. Search params aren't part of
+the route, so `"/"` covers every `?m=`.
 
 Today's date is resolved client-side only, via `useSyncExternalStore` with a `null` server
 snapshot, so SSR output stays timezone-independent.

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -34,4 +35,9 @@ export async function setDayStatus(date: string, status: DayStatus | null) {
         set: { status },
       });
   }
+
+  // The client cache reuses page payloads on browser back/forward, so without
+  // this an edit would vanish from the render when navigating back to its
+  // month. Search params aren't part of the route, so "/" covers every ?m=.
+  revalidatePath("/");
 }
