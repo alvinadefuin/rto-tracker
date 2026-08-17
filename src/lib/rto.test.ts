@@ -9,7 +9,10 @@ import {
   formatMonth,
   formatPeriodRange,
   DEFAULT_RTO_PERCENT,
+  isMandated,
+  mandatesOverlap,
   type TargetPeriod,
+  type WfhMandate,
 } from "./rto";
 
 // Jan 2026: 31 days, starts Thu, 22 weekdays. ceil(0.4*22)=9.
@@ -263,5 +266,105 @@ describe("computeMonthStats target rate", () => {
   it("reports achievedPercent as a whole number", () => {
     const s = computeMonthStats(2026, 1, { "2026-01-05": "office" });
     expect(s.achievedPercent).toBe(5); // round(1/22 * 100) = 5
+  });
+});
+
+describe("isMandated", () => {
+  const closed: WfhMandate[] = [
+    { startDate: "2026-08-12", endDate: "2026-08-20" },
+  ];
+
+  it("is true for a date inside a closed mandate", () => {
+    expect(isMandated("2026-08-17", closed)).toBe(true);
+  });
+
+  it("includes both boundary dates", () => {
+    expect(isMandated("2026-08-12", closed)).toBe(true);
+    expect(isMandated("2026-08-20", closed)).toBe(true);
+  });
+
+  it("is false one day either side", () => {
+    expect(isMandated("2026-08-11", closed)).toBe(false);
+    expect(isMandated("2026-08-21", closed)).toBe(false);
+  });
+
+  it("treats a null endDate as until further notice", () => {
+    const ongoing: WfhMandate[] = [
+      { startDate: "2026-08-12", endDate: null },
+    ];
+    expect(isMandated("2026-08-12", ongoing)).toBe(true);
+    expect(isMandated("2099-01-01", ongoing)).toBe(true);
+    expect(isMandated("2026-08-11", ongoing)).toBe(false);
+  });
+
+  it("is false when there are no mandates", () => {
+    expect(isMandated("2026-08-17", [])).toBe(false);
+  });
+
+  it("matches any mandate in the list", () => {
+    const two: WfhMandate[] = [
+      { startDate: "2026-03-02", endDate: "2026-03-06" },
+      { startDate: "2026-08-12", endDate: null },
+    ];
+    expect(isMandated("2026-03-04", two)).toBe(true);
+    expect(isMandated("2026-08-31", two)).toBe(true);
+    expect(isMandated("2026-05-04", two)).toBe(false);
+  });
+
+  it("ignores the reason field", () => {
+    expect(
+      isMandated("2026-08-17", [
+        { startDate: "2026-08-12", endDate: null, reason: "flood incident" },
+      ])
+    ).toBe(true);
+  });
+});
+
+describe("mandatesOverlap", () => {
+  const m = (startDate: string, endDate: string | null): WfhMandate => ({
+    startDate,
+    endDate,
+  });
+
+  it("is true for identical mandates", () => {
+    expect(
+      mandatesOverlap(m("2026-08-12", "2026-08-20"), m("2026-08-12", "2026-08-20"))
+    ).toBe(true);
+  });
+
+  it("is true when they share exactly one boundary day", () => {
+    expect(
+      mandatesOverlap(m("2026-08-12", "2026-08-20"), m("2026-08-20", "2026-08-25"))
+    ).toBe(true);
+  });
+
+  it("is false for adjacent mandates that do not touch", () => {
+    expect(
+      mandatesOverlap(m("2026-08-12", "2026-08-20"), m("2026-08-21", "2026-08-25"))
+    ).toBe(false);
+  });
+
+  it("is true when an open-ended mandate starts before the other ends", () => {
+    expect(
+      mandatesOverlap(m("2026-08-12", "2026-08-20"), m("2026-08-15", null))
+    ).toBe(true);
+  });
+
+  it("is false when an open-ended mandate starts after the other ends", () => {
+    expect(
+      mandatesOverlap(m("2026-08-12", "2026-08-20"), m("2026-08-21", null))
+    ).toBe(false);
+  });
+
+  it("is true when both are open-ended", () => {
+    expect(mandatesOverlap(m("2026-08-12", null), m("2030-01-01", null))).toBe(
+      true
+    );
+  });
+
+  it("is order-independent", () => {
+    const a = m("2026-08-12", "2026-08-20");
+    const b = m("2026-08-15", null);
+    expect(mandatesOverlap(a, b)).toBe(mandatesOverlap(b, a));
   });
 });

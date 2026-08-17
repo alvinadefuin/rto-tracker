@@ -54,6 +54,34 @@ export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean {
   );
 }
 
+export interface WfhMandate {
+  startDate: string; // YYYY-MM-DD, inclusive
+  endDate: string | null; // YYYY-MM-DD inclusive, or null = until further notice
+  reason?: string | null; // display only; every helper here ignores it
+}
+
+/**
+ * Stand-in for "no end date". Same fixed width as a real YYYY-MM-DD key, so
+ * comparisons stay pure string compares and no Date is ever constructed.
+ * Day-granularity sibling of OPEN_ENDED above.
+ */
+const OPEN_ENDED_DATE = "9999-12-31";
+
+/** True when `date` falls inside any mandate. */
+export function isMandated(date: string, mandates: WfhMandate[]): boolean {
+  return mandates.some(
+    (m) => date >= m.startDate && date <= (m.endDate ?? OPEN_ENDED_DATE)
+  );
+}
+
+/** True when two mandates share at least one day. */
+export function mandatesOverlap(a: WfhMandate, b: WfhMandate): boolean {
+  return (
+    a.startDate <= (b.endDate ?? OPEN_ENDED_DATE) &&
+    b.startDate <= (a.endDate ?? OPEN_ENDED_DATE)
+  );
+}
+
 const MONTH_ABBR = [
   "Jan",
   "Feb",
