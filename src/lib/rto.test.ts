@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { computeMonthStats, monthWeekdays, isWeekend } from "./rto";
+import {
+  computeMonthStats,
+  monthWeekdays,
+  isWeekend,
+  resolvePercent,
+  DEFAULT_RTO_PERCENT,
+  type TargetPeriod,
+} from "./rto";
 
 // Jan 2026: 31 days, starts Thu, 22 weekdays. ceil(0.4*22)=9.
 describe("monthWeekdays", () => {
@@ -75,5 +82,38 @@ describe("computeMonthStats", () => {
     expect(s.eligibleDays).toBe(0);
     expect(s.requiredDays).toBe(0);
     expect(s.percent).toBe(0); // no divide-by-zero
+  });
+});
+
+describe("resolvePercent", () => {
+  const closed: TargetPeriod[] = [
+    { startMonth: "2022-06", endMonth: "2023-12", percent: 20 },
+  ];
+
+  it("returns the period percent for a month inside it", () => {
+    expect(resolvePercent("2023-03", closed)).toBe(20);
+  });
+
+  it("includes both boundary months", () => {
+    expect(resolvePercent("2022-06", closed)).toBe(20);
+    expect(resolvePercent("2023-12", closed)).toBe(20);
+  });
+
+  it("falls back to the default before and after the period", () => {
+    expect(resolvePercent("2022-05", closed)).toBe(DEFAULT_RTO_PERCENT);
+    expect(resolvePercent("2024-01", closed)).toBe(DEFAULT_RTO_PERCENT);
+  });
+
+  it("treats a null endMonth as ongoing", () => {
+    const ongoing: TargetPeriod[] = [
+      { startMonth: "2026-08", endMonth: null, percent: 25 },
+    ];
+    expect(resolvePercent("2026-08", ongoing)).toBe(25);
+    expect(resolvePercent("2099-01", ongoing)).toBe(25);
+    expect(resolvePercent("2026-07", ongoing)).toBe(DEFAULT_RTO_PERCENT);
+  });
+
+  it("falls back to the default when there are no periods", () => {
+    expect(resolvePercent("2026-08", [])).toBe(DEFAULT_RTO_PERCENT);
   });
 });

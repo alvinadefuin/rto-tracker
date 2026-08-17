@@ -11,13 +11,39 @@ export interface WeekStats {
 export interface MonthStats {
   eligibleDays: number; // weekdays − holidays − leaves
   officeDays: number;
-  requiredDays: number; // ceil(0.4 * eligibleDays)
+  requiredDays: number; // ceil(eligibleDays * targetPercent / 100)
   remainingNeeded: number; // max(0, requiredDays − officeDays)
   percent: number; // officeDays / eligibleDays (0 when eligibleDays === 0)
   weeks: WeekStats[]; // Mon–Fri chunks; partial at month edges
 }
 
-export const RTO_TARGET = 0.4;
+/** Whole percent required when no configured period covers a month. */
+export const DEFAULT_RTO_PERCENT = 40;
+
+/**
+ * Stand-in for "no end month". Same fixed width as a real YYYY-MM key, so
+ * comparisons stay pure string compares and no Date is ever constructed.
+ */
+const OPEN_ENDED = "9999-12";
+
+export interface TargetPeriod {
+  startMonth: string; // YYYY-MM, inclusive
+  endMonth: string | null; // YYYY-MM inclusive, or null when ongoing
+  percent: number; // whole percent, 0..100
+}
+
+/** Whole percent in effect for `monthKey` (YYYY-MM). */
+export function resolvePercent(
+  monthKey: string,
+  periods: TargetPeriod[]
+): number {
+  const hit = [...periods]
+    .sort((a, b) => a.startMonth.localeCompare(b.startMonth))
+    .find(
+      (p) => monthKey >= p.startMonth && monthKey <= (p.endMonth ?? OPEN_ENDED)
+    );
+  return hit ? hit.percent : DEFAULT_RTO_PERCENT;
+}
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -77,7 +103,7 @@ export function computeMonthStats(
     }
   }
 
-  const requiredDays = Math.ceil(RTO_TARGET * eligibleDays);
+  const requiredDays = Math.ceil((eligibleDays * DEFAULT_RTO_PERCENT) / 100);
   return {
     eligibleDays,
     officeDays,
