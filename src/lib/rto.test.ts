@@ -4,6 +4,7 @@ import {
   monthWeekdays,
   isWeekend,
   resolvePercent,
+  periodsOverlap,
   DEFAULT_RTO_PERCENT,
   type TargetPeriod,
 } from "./rto";
@@ -115,5 +116,51 @@ describe("resolvePercent", () => {
 
   it("falls back to the default when there are no periods", () => {
     expect(resolvePercent("2026-08", [])).toBe(DEFAULT_RTO_PERCENT);
+  });
+});
+
+describe("periodsOverlap", () => {
+  const p = (
+    startMonth: string,
+    endMonth: string | null,
+    percent = 20
+  ): TargetPeriod => ({ startMonth, endMonth, percent });
+
+  it("is true for identical periods", () => {
+    expect(periodsOverlap(p("2022-06", "2023-12"), p("2022-06", "2023-12"))).toBe(
+      true
+    );
+  });
+
+  it("is true when they share exactly one boundary month", () => {
+    expect(periodsOverlap(p("2022-06", "2023-12"), p("2023-12", "2024-06"))).toBe(
+      true
+    );
+  });
+
+  it("is false for adjacent periods that do not touch", () => {
+    expect(periodsOverlap(p("2022-06", "2023-12"), p("2024-01", "2024-06"))).toBe(
+      false
+    );
+  });
+
+  it("is true when an ongoing period starts before the other ends", () => {
+    expect(periodsOverlap(p("2022-06", "2023-12"), p("2023-01", null))).toBe(true);
+  });
+
+  it("is false when an ongoing period starts after the other ends", () => {
+    expect(periodsOverlap(p("2022-06", "2023-12"), p("2024-01", null))).toBe(
+      false
+    );
+  });
+
+  it("is true when both are ongoing", () => {
+    expect(periodsOverlap(p("2022-06", null), p("2030-01", null))).toBe(true);
+  });
+
+  it("is order-independent", () => {
+    const a = p("2022-06", "2023-12");
+    const b = p("2023-01", null);
+    expect(periodsOverlap(a, b)).toBe(periodsOverlap(b, a));
   });
 });

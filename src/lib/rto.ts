@@ -45,6 +45,14 @@ export function resolvePercent(
   return hit ? hit.percent : DEFAULT_RTO_PERCENT;
 }
 
+/** True when two periods share at least one month. */
+export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean {
+  return (
+    a.startMonth <= (b.endMonth ?? OPEN_ENDED) &&
+    b.startMonth <= (a.endMonth ?? OPEN_ENDED)
+  );
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 function toDateString(year: number, month: number, day: number): string {
