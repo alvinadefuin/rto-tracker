@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { auth, signOut } from "@/auth";
 import { db } from "@/db";
-import { dayEntries } from "@/db/schema";
-import type { Entries } from "@/lib/rto";
+import { dayEntries, rtoTargets } from "@/db/schema";
+import { resolvePercent, type Entries } from "@/lib/rto";
 import { Calendar } from "@/components/calendar";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -63,6 +63,17 @@ export default async function Home({
     rows.map((r) => [r.date, r.status])
   );
 
+  const periodRows = await db
+    .select({
+      startMonth: rtoTargets.startMonth,
+      endMonth: rtoTargets.endMonth,
+      percent: rtoTargets.percent,
+    })
+    .from(rtoTargets)
+    .where(eq(rtoTargets.userId, session.user.id));
+
+  const targetPercent = resolvePercent(monthKey, periodRows);
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
       <header className="mb-8">
@@ -116,6 +127,7 @@ export default async function Home({
         year={year}
         month={month}
         initialEntries={entries}
+        targetPercent={targetPercent}
       />
     </main>
   );

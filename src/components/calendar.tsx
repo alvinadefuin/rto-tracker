@@ -63,10 +63,12 @@ export function Calendar({
   year,
   month,
   initialEntries,
+  targetPercent,
 }: {
   year: number;
   month: number;
   initialEntries: Entries;
+  targetPercent: number;
 }) {
   const [entries, setEntries] = useState<Entries>(initialEntries);
   const [toast, setToast] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export function Calendar({
     () => null
   );
 
-  const stats = computeMonthStats(year, month, entries);
+  const stats = computeMonthStats(year, month, entries, targetPercent);
   const weeks = monthGrid(year, month);
 
   function showToast(message: string) {
