@@ -15,7 +15,7 @@ export default async function SignInPage() {
           RTO Tracker
         </h1>
         <p className="mt-3 text-sm text-fade">
-          Stamp your office days. Stay on the right side of 40%.
+          Stamp your office days. Stay on the right side of your target.
         </p>
         <form
           action={async () => {

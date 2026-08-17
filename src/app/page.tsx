@@ -81,19 +81,27 @@ export default async function Home({
           <p className="font-mono text-[11px] font-medium tracking-[0.2em] text-fade uppercase">
             Attendance record
           </p>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/signin" });
-            }}
-          >
-            <button
-              type="submit"
+          <div className="flex items-baseline gap-4">
+            <Link
+              href="/settings"
               className="font-mono text-[11px] tracking-[0.2em] text-fade uppercase underline-offset-4 hover:text-ink hover:underline"
             >
-              Sign out
-            </button>
-          </form>
+              Settings
+            </Link>
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/signin" });
+              }}
+            >
+              <button
+                type="submit"
+                className="font-mono text-[11px] tracking-[0.2em] text-fade uppercase underline-offset-4 hover:text-ink hover:underline"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
         <div className="mt-2 flex items-center justify-between">
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
