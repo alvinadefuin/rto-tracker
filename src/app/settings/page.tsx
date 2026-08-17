@@ -4,10 +4,10 @@ import { desc, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { rtoTargets } from "@/db/schema";
-import { DEFAULT_RTO_PERCENT, formatPeriodRange } from "@/lib/rto";
+import { DEFAULT_RTO_PERCENT } from "@/lib/rto";
 import { addTargetPeriod } from "@/app/settings-actions";
 import { PeriodForm } from "@/components/period-form";
-import { DeletePeriodButton } from "@/components/delete-period-button";
+import { PeriodRow } from "@/components/period-row";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -58,20 +58,15 @@ export default async function SettingsPage() {
           ) : (
             <ul>
               {periods.map((p) => (
-                <li
+                <PeriodRow
                   key={p.id}
-                  className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-4 py-3 last:border-b-0"
-                >
-                  <span className="font-mono text-sm">
-                    {formatPeriodRange(p)}
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-semibold text-stamp">
-                      {p.percent}%
-                    </span>
-                    <DeletePeriodButton id={p.id} period={p} />
-                  </span>
-                </li>
+                  id={p.id}
+                  period={{
+                    startMonth: p.startMonth,
+                    endMonth: p.endMonth,
+                    percent: p.percent,
+                  }}
+                />
               ))}
             </ul>
           )}
