@@ -13,7 +13,8 @@ export interface MonthStats {
   officeDays: number;
   requiredDays: number; // ceil(eligibleDays * targetPercent / 100)
   remainingNeeded: number; // max(0, requiredDays − officeDays)
-  percent: number; // officeDays / eligibleDays (0 when eligibleDays === 0)
+  targetPercent: number; // whole percent required this month, e.g. 20
+  achievedPercent: number; // whole percent achieved, 0 when eligibleDays === 0
   weeks: WeekStats[]; // Mon–Fri chunks; partial at month edges
 }
 
@@ -124,7 +125,8 @@ export function monthWeekdays(year: number, month: number): string[] {
 export function computeMonthStats(
   year: number,
   month: number,
-  entries: Entries
+  entries: Entries,
+  targetPercent: number = DEFAULT_RTO_PERCENT
 ): MonthStats {
   const weekdays = monthWeekdays(year, month);
 
@@ -151,13 +153,15 @@ export function computeMonthStats(
     }
   }
 
-  const requiredDays = Math.ceil((eligibleDays * DEFAULT_RTO_PERCENT) / 100);
+  const requiredDays = Math.ceil((eligibleDays * targetPercent) / 100);
   return {
     eligibleDays,
     officeDays,
     requiredDays,
     remainingNeeded: Math.max(0, requiredDays - officeDays),
-    percent: eligibleDays === 0 ? 0 : officeDays / eligibleDays,
+    targetPercent,
+    achievedPercent:
+      eligibleDays === 0 ? 0 : Math.round((officeDays / eligibleDays) * 100),
     weeks,
   };
 }

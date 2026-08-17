@@ -38,7 +38,7 @@ describe("computeMonthStats", () => {
     expect(s.officeDays).toBe(0);
     expect(s.requiredDays).toBe(9); // ceil(8.8)
     expect(s.remainingNeeded).toBe(9);
-    expect(s.percent).toBe(0);
+    expect(s.achievedPercent).toBe(0);
   });
 
   it("holidays and leaves reduce eligible days and the target", () => {
@@ -56,7 +56,7 @@ describe("computeMonthStats", () => {
       "2026-01-06": "office",
     });
     expect(s.officeDays).toBe(2);
-    expect(s.percent).toBeCloseTo(2 / 22);
+    expect(s.achievedPercent).toBe(9); // round(9.09)
     expect(s.remainingNeeded).toBe(7);
   });
 
@@ -85,7 +85,7 @@ describe("computeMonthStats", () => {
     const s = computeMonthStats(2026, 1, entries);
     expect(s.eligibleDays).toBe(0);
     expect(s.requiredDays).toBe(0);
-    expect(s.percent).toBe(0); // no divide-by-zero
+    expect(s.achievedPercent).toBe(0); // no divide-by-zero
   });
 });
 
@@ -237,5 +237,31 @@ describe("formatPeriodRange", () => {
         percent: 20,
       })
     ).toBe("Jun 2022 – ongoing");
+  });
+});
+
+describe("computeMonthStats target rate", () => {
+  it("defaults to the 40% requirement", () => {
+    const s = computeMonthStats(2026, 1, {});
+    expect(s.targetPercent).toBe(DEFAULT_RTO_PERCENT);
+    expect(s.requiredDays).toBe(9); // ceil(22 * 40 / 100)
+  });
+
+  it("applies an explicit reduced rate", () => {
+    const s = computeMonthStats(2026, 1, {}, 20);
+    expect(s.targetPercent).toBe(20);
+    expect(s.requiredDays).toBe(5); // ceil(4.4)
+    expect(s.remainingNeeded).toBe(5);
+  });
+
+  it("treats a 0% rate as no requirement", () => {
+    const s = computeMonthStats(2026, 1, {}, 0);
+    expect(s.requiredDays).toBe(0);
+    expect(s.remainingNeeded).toBe(0);
+  });
+
+  it("reports achievedPercent as a whole number", () => {
+    const s = computeMonthStats(2026, 1, { "2026-01-05": "office" });
+    expect(s.achievedPercent).toBe(5); // round(1/22 * 100) = 5
   });
 });

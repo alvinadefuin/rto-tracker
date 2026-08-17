@@ -1,9 +1,15 @@
-import type { MonthStats } from "@/lib/rto";
+import { DEFAULT_RTO_PERCENT, type MonthStats } from "@/lib/rto";
 
 // Stamp-card meter: one ring per required office day, filled as stamped.
 export function Stats({ stats }: { stats: MonthStats }) {
-  const { eligibleDays, officeDays, requiredDays, remainingNeeded, percent } =
-    stats;
+  const {
+    eligibleDays,
+    officeDays,
+    requiredDays,
+    remainingNeeded,
+    targetPercent,
+    achievedPercent,
+  } = stats;
   const filled = Math.min(officeDays, requiredDays);
   const extra = officeDays - filled;
 
@@ -32,12 +38,19 @@ export function Stats({ stats }: { stats: MonthStats }) {
           ) : (
             <span className="text-holiday">target met</span>
           )}{" "}
-          · {Math.round(percent * 100)}%
+          · {achievedPercent}%
         </p>
       </div>
       <p className="text-sm text-fade">
-        {requiredDays} office days required — 40% of {eligibleDays} eligible
-        working days this month.
+        {requiredDays} office days required — {targetPercent}% of {eligibleDays}{" "}
+        eligible working days this month
+        {targetPercent !== DEFAULT_RTO_PERCENT && (
+          <span className="text-stamp">
+            {" "}
+            (adjusted from {DEFAULT_RTO_PERCENT}%)
+          </span>
+        )}
+        .
       </p>
     </section>
   );
