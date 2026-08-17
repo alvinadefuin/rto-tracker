@@ -7,6 +7,7 @@ import { rtoTargets } from "@/db/schema";
 import { DEFAULT_RTO_PERCENT, formatPeriodRange } from "@/lib/rto";
 import { addTargetPeriod } from "@/app/settings-actions";
 import { PeriodForm } from "@/components/period-form";
+import { DeletePeriodButton } from "@/components/delete-period-button";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -64,8 +65,11 @@ export default async function SettingsPage() {
                   <span className="font-mono text-sm">
                     {formatPeriodRange(p)}
                   </span>
-                  <span className="font-mono text-sm font-semibold text-stamp">
-                    {p.percent}%
+                  <span className="flex items-center gap-3">
+                    <span className="font-mono text-sm font-semibold text-stamp">
+                      {p.percent}%
+                    </span>
+                    <DeletePeriodButton id={p.id} period={p} />
                   </span>
                 </li>
               ))}
