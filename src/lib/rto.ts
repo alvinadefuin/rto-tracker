@@ -53,6 +53,46 @@ export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean {
   );
 }
 
+const MONTH_ABBR = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/**
+ * Months a closed period covers, inclusive. `null` when the period is ongoing —
+ * returning null rather than a number forces callers to handle the unbounded
+ * case instead of quietly rendering a wrong count.
+ */
+export function countMonthsInPeriod(period: TargetPeriod): number | null {
+  if (period.endMonth === null) return null;
+  const [sy, sm] = period.startMonth.split("-").map(Number);
+  const [ey, em] = period.endMonth.split("-").map(Number);
+  return ey * 12 + em - (sy * 12 + sm) + 1;
+}
+
+/** "2022-06" → "Jun 2022". */
+export function formatMonth(monthKey: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  return `${MONTH_ABBR[month - 1]} ${year}`;
+}
+
+/** "Jun 2022 – Dec 2023", or "Jun 2022 – ongoing" when open-ended. */
+export function formatPeriodRange(period: TargetPeriod): string {
+  const end =
+    period.endMonth === null ? "ongoing" : formatMonth(period.endMonth);
+  return `${formatMonth(period.startMonth)} – ${end}`;
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 function toDateString(year: number, month: number, day: number): string {

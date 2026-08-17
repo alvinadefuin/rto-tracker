@@ -5,6 +5,9 @@ import {
   isWeekend,
   resolvePercent,
   periodsOverlap,
+  countMonthsInPeriod,
+  formatMonth,
+  formatPeriodRange,
   DEFAULT_RTO_PERCENT,
   type TargetPeriod,
 } from "./rto";
@@ -162,5 +165,77 @@ describe("periodsOverlap", () => {
     const a = p("2022-06", "2023-12");
     const b = p("2023-01", null);
     expect(periodsOverlap(a, b)).toBe(periodsOverlap(b, a));
+  });
+});
+
+describe("countMonthsInPeriod", () => {
+  it("counts inclusive months for a closed period", () => {
+    expect(
+      countMonthsInPeriod({
+        startMonth: "2022-06",
+        endMonth: "2023-12",
+        percent: 20,
+      })
+    ).toBe(19);
+  });
+
+  it("counts a single-month period as 1", () => {
+    expect(
+      countMonthsInPeriod({
+        startMonth: "2022-06",
+        endMonth: "2022-06",
+        percent: 20,
+      })
+    ).toBe(1);
+  });
+
+  it("counts across a year boundary", () => {
+    expect(
+      countMonthsInPeriod({
+        startMonth: "2022-11",
+        endMonth: "2023-02",
+        percent: 20,
+      })
+    ).toBe(4);
+  });
+
+  it("returns null for an ongoing period", () => {
+    expect(
+      countMonthsInPeriod({
+        startMonth: "2022-06",
+        endMonth: null,
+        percent: 20,
+      })
+    ).toBeNull();
+  });
+});
+
+describe("formatMonth", () => {
+  it("renders a YYYY-MM key as an abbreviated month and year", () => {
+    expect(formatMonth("2022-06")).toBe("Jun 2022");
+    expect(formatMonth("2023-12")).toBe("Dec 2023");
+    expect(formatMonth("2026-01")).toBe("Jan 2026");
+  });
+});
+
+describe("formatPeriodRange", () => {
+  it("renders a closed period as a range", () => {
+    expect(
+      formatPeriodRange({
+        startMonth: "2022-06",
+        endMonth: "2023-12",
+        percent: 20,
+      })
+    ).toBe("Jun 2022 – Dec 2023");
+  });
+
+  it("marks an ongoing period", () => {
+    expect(
+      formatPeriodRange({
+        startMonth: "2022-06",
+        endMonth: null,
+        percent: 20,
+      })
+    ).toBe("Jun 2022 – ongoing");
   });
 });
