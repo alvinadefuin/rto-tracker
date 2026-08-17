@@ -1,8 +1,8 @@
 # Architecture
 
 Personal RTO (return-to-office) day tracker. Single-purpose web app: mark which
-weekdays you were in the office, see whether you're meeting the company's 40%
-monthly RTO requirement.
+weekdays you were in the office, see whether you're meeting the company's monthly
+RTO requirement.
 
 ## Stack
 
@@ -31,7 +31,8 @@ All in `src/lib/rto.ts` as pure functions over `YYYY-MM-DD` strings (no Date
 parsing of strings — UTC component math only, to avoid timezone drift).
 
 - Eligible working days in a month = weekdays − holidays − leaves
-- Required office days = `ceil(0.4 × eligible)`
+- Required office days = `ceil(eligible × targetPercent / 100)`, where `targetPercent`
+  comes from `rto_targets` for that month, defaulting to 40
 - RTO % = office ÷ eligible (0 when eligible is 0)
 - Weekly breakdown: Mon–Fri chunks, partial chunks at month edges — informational
   only; the 40% requirement is monthly.

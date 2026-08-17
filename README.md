@@ -45,6 +45,10 @@ npm run dev
 
 Open http://localhost:3000, sign in with Google, tap days.
 
+The 40% requirement is the default. If your policy changed for a stretch of months
+(ours dropped to 20% during a fuel price spike), record that range under **Settings** and
+those months are scored at the lower rate — including retroactively.
+
 ## Verify
 
 ```bash

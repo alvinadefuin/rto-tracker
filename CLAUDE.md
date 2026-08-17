@@ -45,9 +45,16 @@ reasons about calendar days, never instants. `src/lib/rto.ts` does UTC component
 `office | leave | holiday`. Weekends are never stored, and `setDayStatus` rejects them.
 Cycling a day back to WFH deletes the row.
 
-Eligible days = weekdays − holidays − leaves. Required = `ceil(0.4 × eligible)` (rounds up
-deliberately: 22 eligible → 9, since 8 would be 36%). The per-week Mon–Fri breakdown is
-informational — the requirement is monthly.
+Eligible days = weekdays − holidays − leaves. Required = `ceil(eligible × targetPercent / 100)`
+(rounds up deliberately: 22 eligible at 40% → 9, since 8 would be 36%). The per-week
+Mon–Fri breakdown is informational — the requirement is monthly.
+
+**The target rate is per date range, not a constant.** `rto_targets` holds closed periods
+(`start_month`, `end_month`, `percent`) per user; `end_month` NULL means ongoing. Months
+covered by no period use `DEFAULT_RTO_PERCENT` (40). Month keys are `YYYY-MM` **text**, so
+range checks are pure string comparisons — same reasoning as day keys. Overlapping periods
+are rejected in `settings-actions.ts`; gaps are intentional and mean "use the default".
+`resolvePercent` lives outside `computeMonthStats` so each is separately testable.
 
 ### Data flow
 
