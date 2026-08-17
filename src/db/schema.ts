@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -100,4 +101,20 @@ export const dayEntries = pgTable(
     status: dayStatusEnum("status").notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.date] })]
+);
+
+export const rtoTargets = pgTable(
+  "rto_targets",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    startMonth: text("start_month").notNull(), // YYYY-MM inclusive; text avoids TZ drift
+    endMonth: text("end_month"), // YYYY-MM inclusive, or NULL when ongoing
+    percent: integer("percent").notNull(), // whole percent, 0..100
+  },
+  (t) => [index("rto_targets_user_start_idx").on(t.userId, t.startMonth)]
 );
