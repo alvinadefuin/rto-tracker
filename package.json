@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "db:push": "drizzle-kit push",
+    "db:push:prod": "DRIZZLE_TARGET=prod drizzle-kit push"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",

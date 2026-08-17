@@ -12,7 +12,8 @@ npm run dev                # next dev on :3000
 npm run build              # next build
 make test                  # → npm test → vitest run --passWithNoTests
 make lint                  # → npm run lint → eslint
-npx drizzle-kit push       # sync src/db/schema.ts to Neon (reads .env.local)
+npm run db:push            # sync src/db/schema.ts to the DEV Neon branch
+npm run db:push:prod       # ...and to the PRODUCTION branch — both, every time
 npx auth secret            # generate AUTH_SECRET
 ```
 
@@ -23,10 +24,19 @@ npx vitest run src/lib/rto.test.ts
 npx vitest run -t "returns 22 weekdays for Jan 2026"
 ```
 
-Env lives in `.env.local` (copy from `.env.example`): `DATABASE_URL`, `AUTH_SECRET`,
-`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`. `drizzle.config.ts` loads `.env.local` explicitly
-via dotenv; Next loads it on its own. There is no migrations directory — schema changes go
-out with `drizzle-kit push`.
+Env lives in `.env.local` (copy from `.env.example`): `DATABASE_URL`, `PROD_DATABASE_URL`,
+`AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`. `drizzle.config.ts` loads
+`.env.local` explicitly via dotenv; Next loads it on its own.
+
+**There is one Neon project with two branches, and a schema change must be pushed to both.**
+`DATABASE_URL` points at the dev branch (`br-small-salad-az4cwdel`); Vercel's own
+`DATABASE_URL` points at the default `production` branch (`br-flat-night-azuif9ye`).
+`PROD_DATABASE_URL` is the second one, used *only* by `npm run db:push:prod` — the app never
+reads it. There is no migrations directory, so nothing reconciles the two branches for you
+and nothing fails at build time: a table pushed to dev but not prod compiles, deploys, and
+then 500s the first authenticated request that touches it. This is exactly how `rto_targets`
+took production down after `d93c037`. **Editing `src/db/schema.ts` means running both
+`npm run db:push` and `npm run db:push:prod` before the work is done.**
 
 ## Architecture
 
