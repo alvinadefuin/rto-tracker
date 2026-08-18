@@ -21,8 +21,9 @@ export function Stats({ stats }: { stats: MonthStats }) {
       <section aria-label="Monthly progress" className="space-y-2">
         <p className="font-mono text-sm">No requirement — mandated WFH</p>
         <p className="text-sm text-fade">
-          All {mandatedDays} working days this month are mandated work from home,
-          so no office days are required.
+          {mandatedDays} working {mandatedDays === 1 ? "day" : "days"} this month{" "}
+          {mandatedDays === 1 ? "is" : "are"} mandated work from home. No office
+          days are required.
         </p>
       </section>
     );
