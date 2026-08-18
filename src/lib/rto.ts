@@ -15,6 +15,7 @@ export interface MonthStats {
   remainingNeeded: number; // max(0, requiredDays − officeDays)
   targetPercent: number; // whole percent required this month, e.g. 20
   achievedPercent: number; // whole percent achieved, 0 when eligibleDays === 0
+  mandatedDays: number; // mandated weekdays in the month, excluded from eligible
   weeks: WeekStats[]; // Mon–Fri chunks; partial at month edges
 }
 
@@ -220,16 +221,36 @@ export function monthWeekdays(year: number, month: number): string[] {
   return result;
 }
 
+/**
+ * True when a **weekday** counts toward the requirement. Callers filter
+ * weekends first. A mandate wins over any recorded status — the exclusion is a
+ * property of the mandate, not of what the user tapped.
+ *
+ * This is the single definition of the eligible-day rule; computeMonthStats and
+ * the calendar's per-week badge both defer to it.
+ */
+export function isEligible(
+  date: string,
+  entries: Entries,
+  mandates: WfhMandate[]
+): boolean {
+  if (isMandated(date, mandates)) return false;
+  const status = entries[date];
+  return status !== "leave" && status !== "holiday";
+}
+
 export function computeMonthStats(
   year: number,
   month: number,
   entries: Entries,
-  targetPercent: number = DEFAULT_RTO_PERCENT
+  targetPercent: number = DEFAULT_RTO_PERCENT,
+  mandates: WfhMandate[] = []
 ): MonthStats {
   const weekdays = monthWeekdays(year, month);
 
   let eligibleDays = 0;
   let officeDays = 0;
+  let mandatedDays = 0;
   const weeks: WeekStats[] = [];
   let current: WeekStats | null = null;
 
@@ -241,11 +262,14 @@ export function computeMonthStats(
     }
     current.end = date;
 
-    const status = entries[date];
-    if (status === "leave" || status === "holiday") continue;
+    // Counted before the eligibility check: a mandated day that is also marked
+    // leave is one mandated day, not one of each.
+    if (isMandated(date, mandates)) mandatedDays++;
+    if (!isEligible(date, entries, mandates)) continue;
+
     eligibleDays++;
     current.eligibleDays++;
-    if (status === "office") {
+    if (entries[date] === "office") {
       officeDays++;
       current.officeDays++;
     }
@@ -260,6 +284,7 @@ export function computeMonthStats(
     targetPercent,
     achievedPercent:
       eligibleDays === 0 ? 0 : Math.round((officeDays / eligibleDays) * 100),
+    mandatedDays,
     weeks,
   };
 }

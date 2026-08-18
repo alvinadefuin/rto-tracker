@@ -15,6 +15,7 @@ import {
   DEFAULT_RTO_PERCENT,
   isMandated,
   mandatesOverlap,
+  isEligible,
   type TargetPeriod,
   type WfhMandate,
 } from "./rto";
@@ -500,5 +501,136 @@ describe("isValidDateKey", () => {
     expect(isValidDateKey("2026-08")).toBe(false);
     expect(isValidDateKey("12/08/2026")).toBe(false);
     expect(isValidDateKey("2026-08-12T00:00:00Z")).toBe(false);
+  });
+});
+
+describe("isEligible", () => {
+  const none: WfhMandate[] = [];
+  const mandate: WfhMandate[] = [{ startDate: "2026-08-12", endDate: null }];
+
+  it("counts an untouched weekday", () => {
+    expect(isEligible("2026-08-11", {}, none)).toBe(true);
+  });
+
+  it("counts an office day", () => {
+    expect(isEligible("2026-08-11", { "2026-08-11": "office" }, none)).toBe(true);
+  });
+
+  it("excludes leave and holiday", () => {
+    expect(isEligible("2026-08-11", { "2026-08-11": "leave" }, none)).toBe(false);
+    expect(isEligible("2026-08-11", { "2026-08-11": "holiday" }, none)).toBe(
+      false
+    );
+  });
+
+  it("excludes a mandated day with no status", () => {
+    expect(isEligible("2026-08-12", {}, mandate)).toBe(false);
+  });
+
+  it("excludes a mandated day even when stamped as office", () => {
+    expect(isEligible("2026-08-12", { "2026-08-12": "office" }, mandate)).toBe(
+      false
+    );
+  });
+
+  it("excludes a mandated day also marked as leave", () => {
+    expect(isEligible("2026-08-12", { "2026-08-12": "leave" }, mandate)).toBe(
+      false
+    );
+  });
+});
+
+// Aug 2026: 21 weekdays. A mandate from Wed 12 Aug covers 14 of them,
+// leaving 7 eligible → ceil(7 * 40 / 100) = 3 required.
+describe("computeMonthStats with mandates", () => {
+  const fromAug12: WfhMandate[] = [{ startDate: "2026-08-12", endDate: null }];
+
+  it("scores an unmandated August at full strength", () => {
+    const s = computeMonthStats(2026, 8, {});
+    expect(s.eligibleDays).toBe(21);
+    expect(s.requiredDays).toBe(9); // ceil(8.4)
+    expect(s.mandatedDays).toBe(0);
+  });
+
+  it("prorates a partially mandated month", () => {
+    const s = computeMonthStats(2026, 8, {}, DEFAULT_RTO_PERCENT, fromAug12);
+    expect(s.eligibleDays).toBe(7);
+    expect(s.mandatedDays).toBe(14);
+    expect(s.requiredDays).toBe(3); // ceil(2.8)
+    expect(s.remainingNeeded).toBe(3);
+  });
+
+  it("counts office days before the mandate normally", () => {
+    const s = computeMonthStats(
+      2026,
+      8,
+      { "2026-08-03": "office", "2026-08-04": "office" },
+      DEFAULT_RTO_PERCENT,
+      fromAug12
+    );
+    expect(s.officeDays).toBe(2);
+    expect(s.remainingNeeded).toBe(1);
+    expect(s.achievedPercent).toBe(29); // round(2/7 * 100)
+  });
+
+  it("reports no requirement for a fully mandated month", () => {
+    const all: WfhMandate[] = [
+      { startDate: "2026-09-01", endDate: "2026-09-30" },
+    ];
+    const s = computeMonthStats(2026, 9, {}, DEFAULT_RTO_PERCENT, all);
+    expect(s.eligibleDays).toBe(0);
+    expect(s.requiredDays).toBe(0);
+    expect(s.remainingNeeded).toBe(0);
+    expect(s.achievedPercent).toBe(0);
+    expect(s.mandatedDays).toBe(22); // Sep 2026 weekdays
+  });
+
+  it("ignores an office stamp inside a mandate", () => {
+    const all: WfhMandate[] = [
+      { startDate: "2026-09-01", endDate: "2026-09-30" },
+    ];
+    const s = computeMonthStats(
+      2026,
+      9,
+      { "2026-09-08": "office" },
+      DEFAULT_RTO_PERCENT,
+      all
+    );
+    expect(s.officeDays).toBe(0);
+    expect(s.achievedPercent).toBe(0); // cannot exceed 100 with 0 eligible
+  });
+
+  it("counts a mandated leave day once, as mandated", () => {
+    const withLeave = computeMonthStats(
+      2026,
+      8,
+      { "2026-08-13": "leave" },
+      DEFAULT_RTO_PERCENT,
+      fromAug12
+    );
+    const without = computeMonthStats(2026, 8, {}, DEFAULT_RTO_PERCENT, fromAug12);
+    expect(withLeave.eligibleDays).toBe(without.eligibleDays);
+    expect(withLeave.mandatedDays).toBe(without.mandatedDays);
+  });
+
+  it("shrinks week denominators, to zero for a fully mandated week", () => {
+    const s = computeMonthStats(2026, 8, {}, DEFAULT_RTO_PERCENT, fromAug12);
+    // Aug 2026 starts Sat 1, and monthWeekdays drops weekends, so the FIRST
+    // chunk is Mon 3 - Fri 7. There is no partial chunk at this month's edge.
+    expect(s.weeks[0]).toMatchObject({
+      start: "2026-08-03",
+      eligibleDays: 5,
+      officeDays: 0,
+    });
+    // Mon 17 - Fri 21 is entirely inside the mandate
+    const fullyMandated = s.weeks.find((w) => w.start === "2026-08-17");
+    expect(fullyMandated).toMatchObject({ eligibleDays: 0, officeDays: 0 });
+  });
+
+  it("is a no-op when no mandates are passed", () => {
+    const bare = computeMonthStats(2026, 1, {});
+    const explicit = computeMonthStats(2026, 1, {}, DEFAULT_RTO_PERCENT, []);
+    expect(bare).toEqual(explicit);
+    expect(bare.mandatedDays).toBe(0);
   });
 });
