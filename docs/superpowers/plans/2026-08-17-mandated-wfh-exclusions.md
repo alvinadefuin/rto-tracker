@@ -957,9 +957,9 @@ import type { ActionState } from "@/lib/action-state";
 
 - [ ] **Step 5: Verify nothing else imported the old names**
 
-Run: `grep -rn "ActionState" src/ | grep -v "lib/action-state"`
+Run: `grep -rn "import.*ActionState" src/ | grep -v "lib/action-state"`
 
-Expected: four hits only — `settings-actions.ts` (the `import type` and three signatures), `period-form.tsx`, `delete-period-button.tsx`. No file should still import `ActionState` from `@/app/settings-actions`.
+Expected: every remaining hit resolves to `@/lib/action-state`; no file still imports `ActionState` from `@/app/settings-actions`. Filter to import lines deliberately — a bare `grep ActionState` also matches React's `useActionState` hook and the prose in `require-user.ts`, so a raw hit count means nothing here.
 
 - [ ] **Step 6: Typecheck and test**
 
