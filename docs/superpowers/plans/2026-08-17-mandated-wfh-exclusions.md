@@ -1581,8 +1581,9 @@ export function Stats({ stats }: { stats: MonthStats }) {
       <section aria-label="Monthly progress" className="space-y-2">
         <p className="font-mono text-sm">No requirement — mandated WFH</p>
         <p className="text-sm text-fade">
-          All {mandatedDays} working days this month are mandated work from home,
-          so no office days are required.
+          {mandatedDays} working {mandatedDays === 1 ? "day" : "days"} this month{" "}
+          {mandatedDays === 1 ? "is" : "are"} mandated work from home. No office
+          days are required.
         </p>
       </section>
     );
@@ -1959,7 +1960,7 @@ Then `npm run dev`, sign in, and — with the open-ended `2026-08-12` mandate fr
 5. The `wk` badge reads `0/0` for the week of the 17th, and `0/5` for the week of the 3rd.
 6. Tap the 19th to office: the stamp appears faded and struck, the stats line does not move (`3 to go`), and that week's badge stays `0/0`.
 7. Tap the 4th to office: the badge for the week of the 3rd reads `1/5`, and `3 to go` becomes `2 to go` — normal behaviour before the mandate.
-8. Load `/?m=2026-09` — fully inside the mandate. The ring meter is replaced by `No requirement — mandated WFH` over `All 22 working days this month are mandated work from home, so no office days are required.`
+8. Load `/?m=2026-09` — fully inside the mandate. The ring meter is replaced by `No requirement — mandated WFH` over `22 working days this month are mandated work from home. No office days are required.`
 9. Load `/?m=2026-07` — before the mandate. No banner, no hatch, stats read `10 office days required — 40% of 23 eligible working days this month.` with no mandated clause. (July 2026 has 23 weekdays, and `ceil(23 × 40 / 100) = 10`.)
 10. Delete the mandate in `/settings`, return to `/?m=2026-08`, and confirm the month reverts to 21 eligible / 9 required with no banner. Then re-add it if you want it for manual review.
 
