@@ -1918,7 +1918,7 @@ Insert directly after the closing `</div>` of the month-title row, still inside 
 
 ```tsx
         {mandates.length > 0 && (
-          <div className="mt-4 border-l-2 border-fade bg-ink/4 px-3 py-2">
+          <div className="mt-4 space-y-1 border-l-2 border-fade pl-3">
             {mandates.map((m) => (
               <p key={m.id} className="font-mono text-xs text-fade">
                 Mandated WFH{" "}
@@ -1931,6 +1931,11 @@ Insert directly after the closing `</div>` of the month-title row, still inside 
           </div>
         )}
 ```
+
+No `bg-ink/4` fill: that is the weekend wash, and `globals.css` states the hatch exists
+precisely so mandated days do not read like weekends — filling the banner with the weekend
+token would reintroduce the confusion one layer up. A left rule alone reads as an aside.
+`space-y-1` separates the lines when a month is touched by more than one mandate.
 
 "From", not "since": a mandate can be entered with a future start date, and "since" would be false there. Tense-neutral wording is also the only wording that needs no knowledge of today — which this server render must not have, or SSR output stops being timezone-independent.
 

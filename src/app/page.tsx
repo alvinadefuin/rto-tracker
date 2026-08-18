@@ -147,7 +147,7 @@ export default async function Home({
           </nav>
         </div>
         {mandates.length > 0 && (
-          <div className="mt-4 border-l-2 border-fade bg-ink/4 px-3 py-2">
+          <div className="mt-4 space-y-1 border-l-2 border-fade pl-3">
             {mandates.map((m) => (
               <p key={m.id} className="font-mono text-xs text-fade">
                 Mandated WFH{" "}
