@@ -248,9 +248,14 @@ export function computeMonthStats(
 ): MonthStats {
   const weekdays = monthWeekdays(year, month);
 
+  // Counted in its own pass, deliberately: a mandated day that is also marked
+  // leave is one mandated day, not one of each. Keeping this out of the loop
+  // below means the two facts are order-independent, so there is no "which
+  // check runs first" invariant left for a later edit to break.
+  const mandatedDays = weekdays.filter((d) => isMandated(d, mandates)).length;
+
   let eligibleDays = 0;
   let officeDays = 0;
-  let mandatedDays = 0;
   const weeks: WeekStats[] = [];
   let current: WeekStats | null = null;
 
@@ -262,9 +267,6 @@ export function computeMonthStats(
     }
     current.end = date;
 
-    // Counted before the eligibility check: a mandated day that is also marked
-    // leave is one mandated day, not one of each.
-    if (isMandated(date, mandates)) mandatedDays++;
     if (!isEligible(date, entries, mandates)) continue;
 
     eligibleDays++;

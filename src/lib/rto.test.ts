@@ -627,6 +627,31 @@ describe("computeMonthStats with mandates", () => {
     expect(fullyMandated).toMatchObject({ eligibleDays: 0, officeDays: 0 });
   });
 
+  it("splits a week the mandate starts mid-way through", () => {
+    const s = computeMonthStats(2026, 8, {}, DEFAULT_RTO_PERCENT, fromAug12);
+    // Mon 10 and Tue 11 are eligible; Wed 12 - Fri 14 are mandated
+    const transition = s.weeks.find((w) => w.start === "2026-08-10");
+    expect(transition).toMatchObject({ eligibleDays: 2, officeDays: 0 });
+  });
+
+  it("resumes eligibility after a closed mandate ends", () => {
+    // Wed 12 - Fri 14 Aug only: 3 mandated, 18 of August's 21 still eligible
+    const shortMandate: WfhMandate[] = [
+      { startDate: "2026-08-12", endDate: "2026-08-14" },
+    ];
+    const s = computeMonthStats(
+      2026,
+      8,
+      { "2026-08-17": "office" },
+      DEFAULT_RTO_PERCENT,
+      shortMandate
+    );
+    expect(s.mandatedDays).toBe(3);
+    expect(s.eligibleDays).toBe(18);
+    expect(s.requiredDays).toBe(8); // ceil(7.2)
+    expect(s.officeDays).toBe(1); // Mon 17 is past the mandate, so it counts
+  });
+
   it("is a no-op when no mandates are passed", () => {
     const bare = computeMonthStats(2026, 1, {});
     const explicit = computeMonthStats(2026, 1, {}, DEFAULT_RTO_PERCENT, []);
