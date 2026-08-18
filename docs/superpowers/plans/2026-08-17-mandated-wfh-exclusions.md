@@ -1337,8 +1337,32 @@ Then, inside the existing `<section>`, after the closing `</div>` of the "Add a 
           <p className="mb-3 font-mono text-[10px] tracking-widest text-fade uppercase">
             Add a mandate
           </p>
-          <MandateForm action={addWfhMandate} submitLabel="Add mandate" />
+          <MandateForm
+            key={mandates.length}
+            action={addWfhMandate}
+            submitLabel="Add mandate"
+          />
         </div>
+```
+
+**The `key` is not decorative.** `useActionState` does not reset a form, and these inputs are
+uncontrolled `defaultValue` ones. Without a key that changes, `revalidatePath` re-renders the
+server component but React reconciles this client form at the same position as the same fiber —
+so after a successful add the just-submitted dates stay in the fields, and a stray second click
+resubmits them straight into the overlap check, producing a baffling "Overlaps an existing
+mandate" error on what looks like an idle form. Keying on `mandates.length` remounts the form
+only when a row was actually added or removed; a *failed* submit leaves the length unchanged, so
+the user keeps their input alongside the error, which is what you want.
+
+**Apply the same one-line fix to the existing period form** while you are in this file — it has
+the identical defect today:
+
+```tsx
+          <PeriodForm
+            key={periods.length}
+            action={addTargetPeriod}
+            submitLabel="Add period"
+          />
 ```
 
 - [ ] **Step 2: Create the row component**
