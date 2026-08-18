@@ -1664,8 +1664,8 @@ Append to `src/app/globals.css`, below the `@media (prefers-reduced-motion: redu
 .mandate-hatch {
   background-image: repeating-linear-gradient(
     45deg,
-    var(--color-rule) 0,
-    var(--color-rule) 1px,
+    var(--color-fade) 0,
+    var(--color-fade) 1px,
     transparent 1px,
     transparent 6px
   );

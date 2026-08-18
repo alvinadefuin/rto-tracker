@@ -55,12 +55,18 @@ a:focus-visible {
 
 /* Mandated WFH: a condition imposed on the day, not a status the user chose.
    Hatched rather than badged, and hatched rather than the flat bg-ink/4 that
-   weekends use, so the two read as different kinds of "does not count". */
+   weekends use, so the two read as different kinds of "does not count".
+
+   Drawn in --color-fade, not --color-rule. Rule is only 1.31:1 against paper —
+   under the 3:1 non-text floor — and its area-averaged tone lands an RGB
+   distance of 5 from the weekend wash, so the hatch would have blurred into
+   the very thing it exists to be distinguished from. Fade is 3.36:1, which
+   keeps the lines resolvable as lines. Do not soften this back to rule. */
 .mandate-hatch {
   background-image: repeating-linear-gradient(
     45deg,
-    var(--color-rule) 0,
-    var(--color-rule) 1px,
+    var(--color-fade) 0,
+    var(--color-fade) 1px,
     transparent 1px,
     transparent 6px
   );
