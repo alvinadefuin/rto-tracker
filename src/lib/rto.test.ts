@@ -390,7 +390,7 @@ describe("countWeekdaysInMandate", () => {
     ).toBe(1);
   });
 
-  it("counts a single weekend day as 0", () => {
+  it("counts a Sat-Sun span as 0", () => {
     expect(
       countWeekdaysInMandate({
         startDate: "2026-08-15", // Sat
