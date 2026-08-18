@@ -159,6 +159,39 @@ export function formatPeriodRange(period: TargetPeriod): string {
   return `${formatMonth(period.startMonth)} – ${end}`;
 }
 
+/** "2026-08-12" → "12 Aug 2026". */
+export function formatDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return `${day} ${MONTH_ABBR[month - 1]} ${year}`;
+}
+
+/** "12 Aug 2026 – 20 Aug 2026", or "12 Aug 2026 – until further notice". */
+export function formatMandateRange(mandate: WfhMandate): string {
+  const end =
+    mandate.endDate === null
+      ? "until further notice"
+      : formatDate(mandate.endDate);
+  return `${formatDate(mandate.startDate)} – ${end}`;
+}
+
+const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/**
+ * True when `value` is a real calendar day in YYYY-MM-DD form. The regex alone
+ * admits 2026-02-30, so the components are round-tripped through Date.UTC and
+ * compared back — still UTC-only math, never a parse of the string itself.
+ */
+export function isValidDateKey(value: string): boolean {
+  if (!DATE_RE.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d));
+  return (
+    probe.getUTCFullYear() === y &&
+    probe.getUTCMonth() === m - 1 &&
+    probe.getUTCDate() === d
+  );
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 function toDateString(year: number, month: number, day: number): string {

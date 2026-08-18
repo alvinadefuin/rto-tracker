@@ -9,6 +9,9 @@ import {
   countWeekdaysInMandate,
   formatMonth,
   formatPeriodRange,
+  formatDate,
+  formatMandateRange,
+  isValidDateKey,
   DEFAULT_RTO_PERCENT,
   isMandated,
   mandatesOverlap,
@@ -432,5 +435,63 @@ describe("countWeekdaysInMandate", () => {
     expect(
       countWeekdaysInMandate({ startDate: "2026-08-12", endDate: null })
     ).toBeNull();
+  });
+});
+
+describe("formatDate", () => {
+  it("renders a YYYY-MM-DD key as day, abbreviated month, year", () => {
+    expect(formatDate("2026-08-12")).toBe("12 Aug 2026");
+    expect(formatDate("2026-01-01")).toBe("1 Jan 2026");
+    expect(formatDate("2027-12-31")).toBe("31 Dec 2027");
+  });
+
+  it("strips the leading zero from the day", () => {
+    expect(formatDate("2026-08-05")).toBe("5 Aug 2026");
+  });
+});
+
+describe("formatMandateRange", () => {
+  it("renders a closed mandate as a range", () => {
+    expect(
+      formatMandateRange({ startDate: "2026-08-12", endDate: "2026-08-20" })
+    ).toBe("12 Aug 2026 – 20 Aug 2026");
+  });
+
+  it("marks an open-ended mandate as until further notice", () => {
+    expect(
+      formatMandateRange({ startDate: "2026-08-12", endDate: null })
+    ).toBe("12 Aug 2026 – until further notice");
+  });
+});
+
+describe("isValidDateKey", () => {
+  it("accepts a real calendar day", () => {
+    expect(isValidDateKey("2026-08-12")).toBe(true);
+    expect(isValidDateKey("2026-02-28")).toBe(true);
+  });
+
+  it("accepts a real leap day", () => {
+    expect(isValidDateKey("2024-02-29")).toBe(true);
+  });
+
+  it("rejects a day that does not exist in that month", () => {
+    expect(isValidDateKey("2026-02-30")).toBe(false);
+    expect(isValidDateKey("2026-02-29")).toBe(false); // 2026 is not a leap year
+    expect(isValidDateKey("2026-04-31")).toBe(false);
+  });
+
+  it("rejects an out-of-range month or day", () => {
+    expect(isValidDateKey("2026-13-01")).toBe(false);
+    expect(isValidDateKey("2026-00-10")).toBe(false);
+    expect(isValidDateKey("2026-08-32")).toBe(false);
+    expect(isValidDateKey("2026-08-00")).toBe(false);
+  });
+
+  it("rejects anything that is not a zero-padded YYYY-MM-DD key", () => {
+    expect(isValidDateKey("")).toBe(false);
+    expect(isValidDateKey("2026-8-12")).toBe(false);
+    expect(isValidDateKey("2026-08")).toBe(false);
+    expect(isValidDateKey("12/08/2026")).toBe(false);
+    expect(isValidDateKey("2026-08-12T00:00:00Z")).toBe(false);
   });
 });
