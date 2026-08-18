@@ -474,6 +474,13 @@ describe("isValidDateKey", () => {
     expect(isValidDateKey("2024-02-29")).toBe(true);
   });
 
+  // Guards the century rule against a future hand-rolled "% 4" replacement:
+  // today it rides on Date.UTC's calendar math and cannot get this wrong.
+  it("applies the century leap-year rule", () => {
+    expect(isValidDateKey("2000-02-29")).toBe(true); // divisible by 400
+    expect(isValidDateKey("1900-02-29")).toBe(false); // by 100, not 400
+  });
+
   it("rejects a day that does not exist in that month", () => {
     expect(isValidDateKey("2026-02-30")).toBe(false);
     expect(isValidDateKey("2026-02-29")).toBe(false); // 2026 is not a leap year

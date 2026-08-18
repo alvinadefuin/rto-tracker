@@ -522,7 +522,7 @@ The en dash in `formatMandateRange` is `–` (U+2013), matching the existing `fo
 
 Run: `npx vitest run src/lib/rto.test.ts`
 
-Expected: PASS, `Tests 61 passed (61)`.
+Expected: PASS, `Tests 62 passed (62)`.
 
 - [ ] **Step 5: Commit**
 
@@ -780,7 +780,7 @@ export function computeMonthStats(
 
 Run: `npm test`
 
-Expected: PASS, `Tests 75 passed (75)`. Every pre-existing assertion still passes — the new parameter defaults to `[]`, so unmandated behaviour is unchanged.
+Expected: PASS, `Tests 76 passed (76)`. Every pre-existing assertion still passes — the new parameter defaults to `[]`, so unmandated behaviour is unchanged.
 
 - [ ] **Step 7: Typecheck**
 
@@ -965,7 +965,7 @@ Expected: four hits only — `settings-actions.ts` (the `import type` and three 
 
 Run: `npx tsc --noEmit && npm test && npm run lint`
 
-Expected: no type errors, `Tests 75 passed (75)`, lint clean.
+Expected: no type errors, `Tests 76 passed (76)`, lint clean.
 
 - [ ] **Step 7: Commit**
 
@@ -2078,7 +2078,7 @@ leave the end date blank while the mandate is open-ended.
 
 Run: `npm test && npm run lint && npm run build`
 
-Expected: `Tests 75 passed (75)`, lint clean, build succeeds.
+Expected: `Tests 76 passed (76)`, lint clean, build succeeds.
 
 - [ ] **Step 6: Commit**
 
@@ -2091,7 +2091,7 @@ git commit -m "docs: document mandated WFH exclusions"
 
 ## Done criteria
 
-- [ ] `npm test` → `Tests 75 passed (75)`
+- [ ] `npm test` → `Tests 76 passed (76)`
 - [ ] `npm run lint` → clean
 - [ ] `npm run build` → succeeds
 - [ ] `npx tsc --noEmit` → clean
