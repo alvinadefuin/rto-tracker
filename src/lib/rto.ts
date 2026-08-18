@@ -82,6 +82,43 @@ export function mandatesOverlap(a: WfhMandate, b: WfhMandate): boolean {
   );
 }
 
+/**
+ * Inclusive day-by-day walk from `start` to `end`. UTC component math only:
+ * the Date is built from split integers, never parsed from the string.
+ */
+function* eachDate(start: string, end: string): Generator<string> {
+  const [y, m, d] = start.split("-").map(Number);
+  const cursor = new Date(Date.UTC(y, m - 1, d));
+  for (;;) {
+    const date = toDateString(
+      cursor.getUTCFullYear(),
+      cursor.getUTCMonth() + 1,
+      cursor.getUTCDate()
+    );
+    if (date > end) return;
+    yield date;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+}
+
+/**
+ * Weekdays a closed mandate covers, inclusive. `null` when open-ended —
+ * returning null rather than a number forces callers to handle the unbounded
+ * case instead of quietly rendering a wrong count.
+ *
+ * Walks the range rather than using a closed-form weekday formula: the longest
+ * realistic span is a few thousand iterations, evaluated once per delete-dialog
+ * render, and the walk is obviously correct where the formula is not.
+ */
+export function countWeekdaysInMandate(mandate: WfhMandate): number | null {
+  if (mandate.endDate === null) return null;
+  let count = 0;
+  for (const date of eachDate(mandate.startDate, mandate.endDate)) {
+    if (!isWeekend(date)) count++;
+  }
+  return count;
+}
+
 const MONTH_ABBR = [
   "Jan",
   "Feb",

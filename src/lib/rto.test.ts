@@ -6,6 +6,7 @@ import {
   resolvePercent,
   periodsOverlap,
   countMonthsInPeriod,
+  countWeekdaysInMandate,
   formatMonth,
   formatPeriodRange,
   DEFAULT_RTO_PERCENT,
@@ -366,5 +367,70 @@ describe("mandatesOverlap", () => {
     const a = m("2026-08-12", "2026-08-20");
     const b = m("2026-08-15", null);
     expect(mandatesOverlap(a, b)).toBe(mandatesOverlap(b, a));
+  });
+});
+
+describe("countWeekdaysInMandate", () => {
+  it("counts weekdays inclusively, skipping the weekend", () => {
+    // Wed 12 Aug 2026 – Thu 20 Aug: 12,13,14,17,18,19,20 = 7 weekdays
+    expect(
+      countWeekdaysInMandate({
+        startDate: "2026-08-12",
+        endDate: "2026-08-20",
+      })
+    ).toBe(7);
+  });
+
+  it("counts a single weekday as 1", () => {
+    expect(
+      countWeekdaysInMandate({
+        startDate: "2026-08-12", // Wed
+        endDate: "2026-08-12",
+      })
+    ).toBe(1);
+  });
+
+  it("counts a single weekend day as 0", () => {
+    expect(
+      countWeekdaysInMandate({
+        startDate: "2026-08-15", // Sat
+        endDate: "2026-08-16", // Sun
+      })
+    ).toBe(0);
+  });
+
+  it("counts a full Mon-Sun week as 5", () => {
+    expect(
+      countWeekdaysInMandate({
+        startDate: "2026-08-17", // Mon
+        endDate: "2026-08-23", // Sun
+      })
+    ).toBe(5);
+  });
+
+  it("counts across a month boundary", () => {
+    // Mon 31 Aug 2026 + Tue 1 Sep + Wed 2 Sep
+    expect(
+      countWeekdaysInMandate({
+        startDate: "2026-08-31",
+        endDate: "2026-09-02",
+      })
+    ).toBe(3);
+  });
+
+  it("counts across a year boundary", () => {
+    // Wed 30 Dec 2026, Thu 31 Dec, Fri 1 Jan 2027 (Sat 2, Sun 3 skipped), Mon 4
+    expect(
+      countWeekdaysInMandate({
+        startDate: "2026-12-30",
+        endDate: "2027-01-04",
+      })
+    ).toBe(4);
+  });
+
+  it("returns null for an open-ended mandate", () => {
+    expect(
+      countWeekdaysInMandate({ startDate: "2026-08-12", endDate: null })
+    ).toBeNull();
   });
 });
