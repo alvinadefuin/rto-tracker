@@ -28,6 +28,7 @@ export function MandateRow({
           }}
           submitLabel="Save"
           onCancel={() => setEditing(false)}
+          onSuccess={() => setEditing(false)}
         />
       </li>
     );

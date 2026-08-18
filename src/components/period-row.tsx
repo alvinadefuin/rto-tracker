@@ -17,6 +17,7 @@ export function PeriodRow({ id, period }: { id: string; period: TargetPeriod }) 
           initial={{ id, ...period }}
           submitLabel="Save"
           onCancel={() => setEditing(false)}
+          onSuccess={() => setEditing(false)}
         />
       </li>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import type { ActionState } from "@/lib/action-state";
 
 export function PeriodForm({
@@ -8,6 +8,7 @@ export function PeriodForm({
   initial,
   submitLabel,
   onCancel,
+  onSuccess,
 }: {
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   initial?: {
@@ -18,11 +19,27 @@ export function PeriodForm({
   };
   submitLabel: string;
   onCancel?: () => void;
+  onSuccess?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const wasPending = useRef(false);
+
+  // useActionState leaves `state` null both before the first submit and after a
+  // successful one, so success is only detectable as a pending true→false edge
+  // that lands without an error. These inputs are uncontrolled, so nothing
+  // clears them on its own: reset() is what stops a just-added row's values
+  // sitting in the form, inviting a duplicate submit into the overlap check.
+  useEffect(() => {
+    if (wasPending.current && !pending && !state?.error) {
+      formRef.current?.reset();
+      onSuccess?.();
+    }
+    wasPending.current = pending;
+  }, [pending, state, onSuccess]);
 
   return (
-    <form action={formAction} className="space-y-3">
+    <form ref={formRef} action={formAction} className="space-y-3">
       {initial && <input type="hidden" name="id" value={initial.id} />}
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">

@@ -85,11 +85,7 @@ export default async function SettingsPage() {
           <p className="mb-3 font-mono text-[10px] tracking-widest text-fade uppercase">
             Add a period
           </p>
-          <PeriodForm
-            key={periods.length}
-            action={addTargetPeriod}
-            submitLabel="Add period"
-          />
+          <PeriodForm action={addTargetPeriod} submitLabel="Add period" />
         </div>
 
         <div className="border-t border-rule pt-6">
@@ -133,11 +129,7 @@ export default async function SettingsPage() {
           <p className="mb-3 font-mono text-[10px] tracking-widest text-fade uppercase">
             Add a mandate
           </p>
-          <MandateForm
-            key={mandates.length}
-            action={addWfhMandate}
-            submitLabel="Add mandate"
-          />
+          <MandateForm action={addWfhMandate} submitLabel="Add mandate" />
         </div>
       </section>
     </main>
