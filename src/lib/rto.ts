@@ -9,7 +9,7 @@ export interface WeekStats {
 }
 
 export interface MonthStats {
-  eligibleDays: number; // weekdays − holidays − leaves
+  eligibleDays: number; // weekdays − mandated − holidays − leaves
   officeDays: number;
   requiredDays: number; // ceil(eligibleDays * targetPercent / 100)
   remainingNeeded: number; // max(0, requiredDays − officeDays)
