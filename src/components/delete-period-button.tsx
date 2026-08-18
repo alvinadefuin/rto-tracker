@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
-import { deleteTargetPeriod, type ActionState } from "@/app/settings-actions";
+import { deleteTargetPeriod } from "@/app/settings-actions";
+import type { ActionState } from "@/lib/action-state";
 import {
   DEFAULT_RTO_PERCENT,
   countMonthsInPeriod,

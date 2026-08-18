@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import type { ActionState } from "@/app/settings-actions";
+import type { ActionState } from "@/lib/action-state";
 
 export function PeriodForm({
   action,
