@@ -232,14 +232,18 @@ export function Calendar({
                       {day}
                     </span>
                     {mandated && date === firstMandated && (
-                      <span className="font-mono text-[10px] tracking-widest text-fade lowercase">
+                      <span className="bg-paper px-1 font-mono text-[10px] tracking-widest text-fade lowercase">
                         mandated
                       </span>
                     )}
                     {status && (
                       <DayMark
                         status={status}
-                        stamped={justStamped === date}
+                        // stamp-in ends on opacity:1 with fill-mode both, and
+                        // animation values outrank the opacity-40 utility — so
+                        // animating a muted stamp would un-mute it until the
+                        // next tap anywhere clears justStamped.
+                        stamped={justStamped === date && !mandated}
                         muted={mandated}
                       />
                     )}
