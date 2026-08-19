@@ -780,7 +780,7 @@ export function computeMonthStats(
 
 Run: `npm test`
 
-Expected: PASS, `Tests 78 passed (78)`. Every pre-existing assertion still passes — the new parameter defaults to `[]`, so unmandated behaviour is unchanged.
+Expected: PASS, `Tests 79 passed (79)`. Every pre-existing assertion still passes — the new parameter defaults to `[]`, so unmandated behaviour is unchanged.
 
 - [ ] **Step 7: Typecheck**
 
@@ -965,7 +965,7 @@ Expected: every remaining hit resolves to `@/lib/action-state`; no file still im
 
 Run: `npx tsc --noEmit && npm test && npm run lint`
 
-Expected: no type errors, `Tests 78 passed (78)`, lint clean.
+Expected: no type errors, `Tests 79 passed (79)`, lint clean.
 
 - [ ] **Step 7: Commit**
 
@@ -1337,33 +1337,23 @@ Then, inside the existing `<section>`, after the closing `</div>` of the "Add a 
           <p className="mb-3 font-mono text-[10px] tracking-widest text-fade uppercase">
             Add a mandate
           </p>
-          <MandateForm
-            key={mandates.length}
-            action={addWfhMandate}
-            submitLabel="Add mandate"
-          />
+          <MandateForm action={addWfhMandate} submitLabel="Add mandate" />
         </div>
 ```
 
-**The `key` is not decorative.** `useActionState` does not reset a form, and these inputs are
-uncontrolled `defaultValue` ones. Without a key that changes, `revalidatePath` re-renders the
-server component but React reconciles this client form at the same position as the same fiber —
-so after a successful add the just-submitted dates stay in the fields, and a stray second click
-resubmits them straight into the overlap check, producing a baffling "Overlaps an existing
-mandate" error on what looks like an idle form. Keying on `mandates.length` remounts the form
-only when a row was actually added or removed; a *failed* submit leaves the length unchanged, so
-the user keeps their input alongside the error, which is what you want.
+**Superseded during implementation — recorded so the reasoning is not lost.** This step
+originally keyed the add form on `mandates.length` to force a remount after a successful add.
+The problem is real: `useActionState` does not reset a form, these inputs are uncontrolled
+`defaultValue` ones, and without intervention the just-submitted dates stay in the fields, so a
+stray second click resubmits them into the overlap check and produces a baffling "Overlaps an
+existing mandate" error on an apparently idle form.
 
-**Apply the same one-line fix to the existing period form** while you are in this file — it has
-the identical defect today:
-
-```tsx
-          <PeriodForm
-            key={periods.length}
-            action={addTargetPeriod}
-            submitLabel="Add period"
-          />
-```
+The length key was replaced by a better fix in `MandateForm` itself (and `PeriodForm`): an
+effect watches for a `pending` true→false edge that lands without an error, then calls
+`formRef.current?.reset()` and an optional `onSuccess`. That resets the add form *and* lets an
+editing row leave edit mode, which a key never could — and it closes a race the length key had,
+where an add plus a delete of a different row net to no length change and the form never resets.
+The page therefore passes **no** `key` to either add form.
 
 - [ ] **Step 2: Create the row component**
 
@@ -2108,7 +2098,7 @@ leave the end date blank while the mandate is open-ended.
 
 Run: `npm test && npm run lint && npm run build`
 
-Expected: `Tests 78 passed (78)`, lint clean, build succeeds.
+Expected: `Tests 79 passed (79)`, lint clean, build succeeds.
 
 - [ ] **Step 6: Commit**
 
@@ -2121,7 +2111,7 @@ git commit -m "docs: document mandated WFH exclusions"
 
 ## Done criteria
 
-- [ ] `npm test` → `Tests 78 passed (78)`
+- [ ] `npm test` → `Tests 79 passed (79)`
 - [ ] `npm run lint` → clean
 - [ ] `npm run build` → succeeds
 - [ ] `npx tsc --noEmit` → clean

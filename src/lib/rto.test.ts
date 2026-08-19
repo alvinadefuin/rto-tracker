@@ -652,6 +652,23 @@ describe("computeMonthStats with mandates", () => {
     expect(s.officeDays).toBe(1); // Mon 17 is past the mandate, so it counts
   });
 
+  it("scores a month-spanning mandate correctly from both sides", () => {
+    // Wed 28 Jan 2026 - Tue 3 Feb: 28,29,30 in Jan (Sat 31 skipped),
+    // then 2,3 in Feb (Sun 1 skipped).
+    const spanning: WfhMandate[] = [
+      { startDate: "2026-01-28", endDate: "2026-02-03" },
+    ];
+    const jan = computeMonthStats(2026, 1, {}, DEFAULT_RTO_PERCENT, spanning);
+    const feb = computeMonthStats(2026, 2, {}, DEFAULT_RTO_PERCENT, spanning);
+    expect(jan.mandatedDays).toBe(3);
+    expect(jan.eligibleDays).toBe(22 - 3);
+    expect(feb.mandatedDays).toBe(2);
+    expect(feb.eligibleDays).toBe(20 - 2); // Feb 2026 has 20 weekdays
+    // The same mandate array is passed to both months and neither leaks days
+    // into the other.
+    expect(jan.mandatedDays + feb.mandatedDays).toBe(5);
+  });
+
   it("is a no-op when no mandates are passed", () => {
     const bare = computeMonthStats(2026, 1, {});
     const explicit = computeMonthStats(2026, 1, {}, DEFAULT_RTO_PERCENT, []);

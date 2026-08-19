@@ -72,6 +72,9 @@ export function MandateForm({
           <input
             type="text"
             name="reason"
+            // Mirrors REASON_MAX in mandate-actions.ts, which is authoritative;
+            // this only spares the round trip. "use server" modules export
+            // async functions only, so the constant cannot be imported here.
             maxLength={200}
             placeholder="optional"
             defaultValue={initial?.reason ?? ""}
