@@ -118,3 +118,19 @@ export const rtoTargets = pgTable(
   },
   (t) => [index("rto_targets_user_start_idx").on(t.userId, t.startMonth)]
 );
+
+export const wfhMandates = pgTable(
+  "wfh_mandates",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    startDate: text("start_date").notNull(), // YYYY-MM-DD inclusive; text avoids TZ drift
+    endDate: text("end_date"), // YYYY-MM-DD inclusive, or NULL = until further notice
+    reason: text("reason"), // optional human note; never parsed
+  },
+  (t) => [index("wfh_mandates_user_start_idx").on(t.userId, t.startDate)]
+);

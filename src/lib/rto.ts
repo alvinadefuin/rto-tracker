@@ -9,12 +9,13 @@ export interface WeekStats {
 }
 
 export interface MonthStats {
-  eligibleDays: number; // weekdays − holidays − leaves
+  eligibleDays: number; // weekdays − mandated − holidays − leaves
   officeDays: number;
   requiredDays: number; // ceil(eligibleDays * targetPercent / 100)
   remainingNeeded: number; // max(0, requiredDays − officeDays)
   targetPercent: number; // whole percent required this month, e.g. 20
   achievedPercent: number; // whole percent achieved, 0 when eligibleDays === 0
+  mandatedDays: number; // mandated weekdays in the month, excluded from eligible
   weeks: WeekStats[]; // Mon–Fri chunks; partial at month edges
 }
 
@@ -52,6 +53,71 @@ export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean {
     a.startMonth <= (b.endMonth ?? OPEN_ENDED) &&
     b.startMonth <= (a.endMonth ?? OPEN_ENDED)
   );
+}
+
+export interface WfhMandate {
+  startDate: string; // YYYY-MM-DD, inclusive
+  endDate: string | null; // YYYY-MM-DD inclusive, or null = until further notice
+  reason?: string | null; // display only; every helper here ignores it
+}
+
+/**
+ * Stand-in for "no end date". Same fixed width as a real YYYY-MM-DD key, so
+ * comparisons stay pure string compares and no Date is ever constructed.
+ * Day-granularity sibling of OPEN_ENDED above.
+ */
+const OPEN_ENDED_DATE = "9999-12-31";
+
+/** True when `date` falls inside any mandate. */
+export function isMandated(date: string, mandates: WfhMandate[]): boolean {
+  return mandates.some(
+    (m) => date >= m.startDate && date <= (m.endDate ?? OPEN_ENDED_DATE)
+  );
+}
+
+/** True when two mandates share at least one day. */
+export function mandatesOverlap(a: WfhMandate, b: WfhMandate): boolean {
+  return (
+    a.startDate <= (b.endDate ?? OPEN_ENDED_DATE) &&
+    b.startDate <= (a.endDate ?? OPEN_ENDED_DATE)
+  );
+}
+
+/**
+ * Inclusive day-by-day walk from `start` to `end`. UTC component math only:
+ * the Date is built from split integers, never parsed from the string.
+ */
+function* eachDate(start: string, end: string): Generator<string> {
+  const [y, m, d] = start.split("-").map(Number);
+  const cursor = new Date(Date.UTC(y, m - 1, d));
+  for (;;) {
+    const date = toDateString(
+      cursor.getUTCFullYear(),
+      cursor.getUTCMonth() + 1,
+      cursor.getUTCDate()
+    );
+    if (date > end) return;
+    yield date;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+}
+
+/**
+ * Weekdays a closed mandate covers, inclusive. `null` when open-ended —
+ * returning null rather than a number forces callers to handle the unbounded
+ * case instead of quietly rendering a wrong count.
+ *
+ * Walks the range rather than using a closed-form weekday formula: the longest
+ * realistic span is a few thousand iterations, evaluated once per delete-dialog
+ * render, and the walk is obviously correct where the formula is not.
+ */
+export function countWeekdaysInMandate(mandate: WfhMandate): number | null {
+  if (mandate.endDate === null) return null;
+  let count = 0;
+  for (const date of eachDate(mandate.startDate, mandate.endDate)) {
+    if (!isWeekend(date)) count++;
+  }
+  return count;
 }
 
 const MONTH_ABBR = [
@@ -94,6 +160,39 @@ export function formatPeriodRange(period: TargetPeriod): string {
   return `${formatMonth(period.startMonth)} – ${end}`;
 }
 
+/** "2026-08-12" → "12 Aug 2026". */
+export function formatDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return `${day} ${MONTH_ABBR[month - 1]} ${year}`;
+}
+
+/** "12 Aug 2026 – 20 Aug 2026", or "12 Aug 2026 – until further notice". */
+export function formatMandateRange(mandate: WfhMandate): string {
+  const end =
+    mandate.endDate === null
+      ? "until further notice"
+      : formatDate(mandate.endDate);
+  return `${formatDate(mandate.startDate)} – ${end}`;
+}
+
+const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/**
+ * True when `value` is a real calendar day in YYYY-MM-DD form. The regex alone
+ * admits 2026-02-30, so the components are round-tripped through Date.UTC and
+ * compared back — still UTC-only math, never a parse of the string itself.
+ */
+export function isValidDateKey(value: string): boolean {
+  if (!DATE_RE.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d));
+  return (
+    probe.getUTCFullYear() === y &&
+    probe.getUTCMonth() === m - 1 &&
+    probe.getUTCDate() === d
+  );
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 function toDateString(year: number, month: number, day: number): string {
@@ -122,13 +221,38 @@ export function monthWeekdays(year: number, month: number): string[] {
   return result;
 }
 
+/**
+ * True when a **weekday** counts toward the requirement. Callers filter
+ * weekends first. A mandate wins over any recorded status — the exclusion is a
+ * property of the mandate, not of what the user tapped.
+ *
+ * This is the single definition of the eligible-day rule; computeMonthStats and
+ * the calendar's per-week badge both defer to it.
+ */
+export function isEligible(
+  date: string,
+  entries: Entries,
+  mandates: WfhMandate[]
+): boolean {
+  if (isMandated(date, mandates)) return false;
+  const status = entries[date];
+  return status !== "leave" && status !== "holiday";
+}
+
 export function computeMonthStats(
   year: number,
   month: number,
   entries: Entries,
-  targetPercent: number = DEFAULT_RTO_PERCENT
+  targetPercent: number = DEFAULT_RTO_PERCENT,
+  mandates: WfhMandate[] = []
 ): MonthStats {
   const weekdays = monthWeekdays(year, month);
+
+  // Counted in its own pass, deliberately: a mandated day that is also marked
+  // leave is one mandated day, not one of each. Keeping this out of the loop
+  // below means the two facts are order-independent, so there is no "which
+  // check runs first" invariant left for a later edit to break.
+  const mandatedDays = weekdays.filter((d) => isMandated(d, mandates)).length;
 
   let eligibleDays = 0;
   let officeDays = 0;
@@ -143,11 +267,11 @@ export function computeMonthStats(
     }
     current.end = date;
 
-    const status = entries[date];
-    if (status === "leave" || status === "holiday") continue;
+    if (!isEligible(date, entries, mandates)) continue;
+
     eligibleDays++;
     current.eligibleDays++;
-    if (status === "office") {
+    if (entries[date] === "office") {
       officeDays++;
       current.officeDays++;
     }
@@ -162,6 +286,7 @@ export function computeMonthStats(
     targetPercent,
     achievedPercent:
       eligibleDays === 0 ? 0 : Math.round((officeDays / eligibleDays) * 100),
+    mandatedDays,
     weeks,
   };
 }

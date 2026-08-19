@@ -9,9 +9,25 @@ export function Stats({ stats }: { stats: MonthStats }) {
     remainingNeeded,
     targetPercent,
     achievedPercent,
+    mandatedDays,
   } = stats;
   const filled = Math.min(officeDays, requiredDays);
   const extra = officeDays - filled;
+
+  // Nothing was owed this month. Rendering zero rings and "0/0 stamped ·
+  // target met · 0%" would read as a bug, so say why instead.
+  if (eligibleDays === 0 && mandatedDays > 0) {
+    return (
+      <section aria-label="Monthly progress" className="space-y-2">
+        <p className="font-mono text-sm">No requirement — mandated WFH</p>
+        <p className="text-sm text-fade">
+          {mandatedDays} working {mandatedDays === 1 ? "day" : "days"} this month{" "}
+          {mandatedDays === 1 ? "is" : "are"} mandated work from home. No office
+          days are required.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section aria-label="Monthly progress" className="space-y-2">
@@ -50,7 +66,7 @@ export function Stats({ stats }: { stats: MonthStats }) {
             (adjusted from {DEFAULT_RTO_PERCENT}%)
           </span>
         )}
-        .
+        {mandatedDays > 0 && <> · {mandatedDays} days mandated WFH</>}.
       </p>
     </section>
   );

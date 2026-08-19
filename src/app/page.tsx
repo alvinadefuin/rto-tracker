@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { auth, signOut } from "@/auth";
 import { db } from "@/db";
-import { dayEntries, rtoTargets } from "@/db/schema";
-import { resolvePercent, type Entries } from "@/lib/rto";
+import { dayEntries, rtoTargets, wfhMandates } from "@/db/schema";
+import { formatDate, resolvePercent, type Entries } from "@/lib/rto";
 import { Calendar } from "@/components/calendar";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -74,6 +74,28 @@ export default async function Home({
 
   const targetPercent = resolvePercent(monthKey, periodRows);
 
+  // Only mandates touching this month. The -31 upper bound is the same string
+  // comparison trick the day_entries query uses: a bound past the end of a
+  // short month is harmless against a fixed-width key.
+  const mandates = await db
+    .select({
+      id: wfhMandates.id,
+      startDate: wfhMandates.startDate,
+      endDate: wfhMandates.endDate,
+      reason: wfhMandates.reason,
+    })
+    .from(wfhMandates)
+    .where(
+      and(
+        eq(wfhMandates.userId, session.user.id),
+        lte(wfhMandates.startDate, `${monthKey}-31`),
+        or(
+          isNull(wfhMandates.endDate),
+          gte(wfhMandates.endDate, `${monthKey}-01`)
+        )
+      )
+    );
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
       <header className="mb-8">
@@ -124,6 +146,19 @@ export default async function Home({
             </Link>
           </nav>
         </div>
+        {mandates.length > 0 && (
+          <div className="mt-4 space-y-1 border-l-2 border-fade pl-3">
+            {mandates.map((m) => (
+              <p key={m.id} className="font-mono text-xs text-fade">
+                Mandated WFH{" "}
+                {m.endDate === null
+                  ? `from ${formatDate(m.startDate)} — until further notice`
+                  : `${formatDate(m.startDate)} – ${formatDate(m.endDate)}`}
+                {m.reason ? ` (${m.reason})` : ""}
+              </p>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* Keyed by month: search-param navigation re-renders rather than
@@ -136,6 +171,7 @@ export default async function Home({
         month={month}
         initialEntries={entries}
         targetPercent={targetPercent}
+        mandates={mandates}
       />
     </main>
   );

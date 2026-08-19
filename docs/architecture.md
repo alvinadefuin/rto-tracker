@@ -30,7 +30,9 @@ day_entries
 All in `src/lib/rto.ts` as pure functions over `YYYY-MM-DD` strings (no Date
 parsing of strings — UTC component math only, to avoid timezone drift).
 
-- Eligible working days in a month = weekdays − holidays − leaves
+- Eligible working days in a month = weekdays − mandated WFH − holidays − leaves
+- Mandated WFH days come from `wfh_mandates` day ranges, not from `day_entries`, and
+  take precedence over any recorded status
 - Required office days = `ceil(eligible × targetPercent / 100)`, where `targetPercent`
   comes from `rto_targets` for that month, defaulting to 40
 - RTO % = office ÷ eligible (0 when eligible is 0)

@@ -4,9 +4,12 @@ import { useRef, useState, useSyncExternalStore } from "react";
 import { setDayStatus } from "@/app/actions";
 import {
   computeMonthStats,
+  isEligible,
+  isMandated,
   isWeekend,
   type DayStatus,
   type Entries,
+  type WfhMandate,
 } from "@/lib/rto";
 import { Stats } from "@/components/stats";
 import { Toast } from "@/components/toast";
@@ -36,13 +39,22 @@ function monthGrid(year: number, month: number): (string | null)[][] {
   return weeks;
 }
 
-function DayMark({ status, stamped }: { status: DayStatus; stamped: boolean }) {
+function DayMark({
+  status,
+  stamped,
+  muted = false,
+}: {
+  status: DayStatus;
+  stamped: boolean;
+  muted?: boolean;
+}) {
+  const mutedClass = muted ? "opacity-40 line-through" : "";
   if (status === "office") {
     return (
       <span
         className={`stamp-ring px-2 py-0.5 font-mono text-[10px] font-semibold tracking-widest uppercase ${
           stamped ? "stamp-in" : ""
-        }`}
+        } ${mutedClass}`}
       >
         Office
       </span>
@@ -52,7 +64,7 @@ function DayMark({ status, stamped }: { status: DayStatus; stamped: boolean }) {
     <span
       className={`font-mono text-[10px] font-medium tracking-widest uppercase ${
         status === "leave" ? "text-leave" : "text-holiday"
-      }`}
+      } ${mutedClass}`}
     >
       {status}
     </span>
@@ -64,11 +76,13 @@ export function Calendar({
   month,
   initialEntries,
   targetPercent,
+  mandates,
 }: {
   year: number;
   month: number;
   initialEntries: Entries;
   targetPercent: number;
+  mandates: WfhMandate[];
 }) {
   const [entries, setEntries] = useState<Entries>(initialEntries);
   const [toast, setToast] = useState<string | null>(null);
@@ -86,7 +100,7 @@ export function Calendar({
     () => null
   );
 
-  const stats = computeMonthStats(year, month, entries, targetPercent);
+  const stats = computeMonthStats(year, month, entries, targetPercent, mandates);
   const weeks = monthGrid(year, month);
 
   function showToast(message: string) {
@@ -147,12 +161,14 @@ export function Calendar({
           const weekdays = week.filter(
             (d): d is string => d !== null && !isWeekend(d)
           );
-          const eligible = weekdays.filter(
-            (d) => entries[d] !== "leave" && entries[d] !== "holiday"
+          const eligible = weekdays.filter((d) =>
+            isEligible(d, entries, mandates)
           ).length;
           const office = weekdays.filter(
-            (d) => entries[d] === "office"
+            (d) => isEligible(d, entries, mandates) && entries[d] === "office"
           ).length;
+          // The label announces the condition once per row, not the run's bounds
+          const firstMandated = weekdays.find((d) => isMandated(d, mandates));
 
           return (
             <div
@@ -185,18 +201,29 @@ export function Calendar({
                   );
                 }
                 const status = entries[date] ?? null;
+                const mandated = isMandated(date, mandates);
                 return (
                   <button
                     key={di}
                     type="button"
                     onClick={() => cycle(date)}
-                    aria-label={`${date}: ${STATUS_LABEL[status ?? "wfh"]}. Tap to change.`}
-                    className={`relative flex min-h-16 flex-col items-center justify-center p-1.5 transition-colors hover:bg-ink/5 ${
+                    aria-label={
+                      mandated
+                        ? `${date}: Mandated work from home${
+                            status
+                              ? `, ${STATUS_LABEL[status]} recorded but not counted`
+                              : ""
+                          }. Tap to change.`
+                        : `${date}: ${STATUS_LABEL[status ?? "wfh"]}. Tap to change.`
+                    }
+                    className={`relative flex min-h-16 flex-col items-center justify-center gap-0.5 p-1.5 transition-colors hover:bg-ink/5 ${
                       di > 0 ? "border-l border-rule" : ""
-                    }`}
+                    } ${mandated ? "mandate-hatch" : ""}`}
                   >
                     <span
                       className={`absolute top-1.5 left-1.5 font-mono text-xs ${
+                        mandated ? "text-fade" : ""
+                      } ${
                         date === today
                           ? "-mx-1 -my-0.5 bg-ink px-1 py-0.5 font-semibold text-paper"
                           : ""
@@ -204,10 +231,20 @@ export function Calendar({
                     >
                       {day}
                     </span>
+                    {mandated && date === firstMandated && (
+                      <span className="bg-paper px-1 font-mono text-[10px] tracking-widest text-fade lowercase">
+                        mandated
+                      </span>
+                    )}
                     {status && (
                       <DayMark
                         status={status}
-                        stamped={justStamped === date}
+                        // stamp-in ends on opacity:1 with fill-mode both, and
+                        // animation values outrank the opacity-40 utility — so
+                        // animating a muted stamp would un-mute it until the
+                        // next tap anywhere clears justStamped.
+                        stamped={justStamped === date && !mandated}
+                        muted={mandated}
                       />
                     )}
                   </button>
@@ -225,7 +262,8 @@ export function Calendar({
 
       <p className="text-xs text-fade">
         Tap a weekday to cycle: work from home → office → leave → holiday.
-        Untouched days count as work from home.
+        Untouched days count as work from home. Hatched days are mandated work
+        from home — they don&apos;t count toward the requirement.
       </p>
 
       {toast && <Toast message={toast} />}

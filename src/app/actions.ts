@@ -2,25 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
-import { auth } from "@/auth";
 import { db } from "@/db";
 import { dayEntries } from "@/db/schema";
+import { requireUserId } from "@/lib/require-user";
 import { isWeekend, type DayStatus } from "@/lib/rto";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STATUSES: DayStatus[] = ["office", "leave", "holiday"];
 
 export async function setDayStatus(date: string, status: DayStatus | null) {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Not authenticated");
+  const userId = await requireUserId();
 
   if (!DATE_RE.test(date)) throw new Error(`Invalid date: ${date}`);
   if (isWeekend(date)) throw new Error(`Weekends cannot be marked: ${date}`);
   if (status !== null && !STATUSES.includes(status)) {
     throw new Error(`Invalid status: ${status}`);
   }
-
-  const userId = session.user.id;
 
   if (status === null) {
     await db

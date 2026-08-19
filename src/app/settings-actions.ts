@@ -2,16 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
-import { auth } from "@/auth";
 import { db } from "@/db";
 import { rtoTargets } from "@/db/schema";
+import type { ActionState } from "@/lib/action-state";
+import { requireUserId } from "@/lib/require-user";
 import {
   formatPeriodRange,
   periodsOverlap,
   type TargetPeriod,
 } from "@/lib/rto";
-
-export type ActionState = { error?: string } | null;
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -37,12 +36,6 @@ function parse(
     return { ok: false, error: "End month cannot be before the start month." };
   }
   return { ok: true, period: { startMonth, endMonth, percent } };
-}
-
-async function requireUserId(): Promise<string> {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Not authenticated");
-  return session.user.id;
 }
 
 /** Returns an error message when `period` collides with an existing row. */

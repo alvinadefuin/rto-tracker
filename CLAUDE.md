@@ -55,7 +55,8 @@ reasons about calendar days, never instants. `src/lib/rto.ts` does UTC component
 `office | leave | holiday`. Weekends are never stored, and `setDayStatus` rejects them.
 Cycling a day back to WFH deletes the row.
 
-Eligible days = weekdays − holidays − leaves. Required = `ceil(eligible × targetPercent / 100)`
+Eligible days = weekdays − mandated − holidays − leaves. Required =
+`ceil(eligible × targetPercent / 100)`
 (rounds up deliberately: 22 eligible at 40% → 9, since 8 would be 36%). The per-week
 Mon–Fri breakdown is informational — the requirement is monthly.
 
@@ -65,6 +66,15 @@ covered by no period use `DEFAULT_RTO_PERCENT` (40). Month keys are `YYYY-MM` **
 range checks are pure string comparisons — same reasoning as day keys. Overlapping periods
 are rejected in `settings-actions.ts`; gaps are intentional and mean "use the default".
 `resolvePercent` lives outside `computeMonthStats` so each is separately testable.
+
+**Mandated WFH days are excluded outright.** `wfh_mandates` holds inclusive day ranges
+(`start_date`, `end_date`) per user; `end_date` NULL means until further notice. Dates are
+`YYYY-MM-DD` **text**, so range checks are pure string comparisons — the same reasoning as
+month keys. Overlaps are rejected in `mandate-actions.ts`. A mandate wins over anything in
+`day_entries`: `isEligible` checks it first, so an `office` stamp inside a mandate is still
+rendered (faded, as a record) but excluded from `officeDays` — which is what keeps
+`officeDays ≤ eligibleDays` and `achievedPercent ≤ 100`. `MonthStats.mandatedDays` exists
+because `eligibleDays === 0` now has two causes and the copy differs between them.
 
 ### Data flow
 

@@ -2,8 +2,8 @@
 
 Personal return-to-office attendance record. Stamp the weekdays you were in the
 office; the app tracks whether you're meeting the 40% monthly requirement.
-Unmarked weekdays count as work from home; leaves and holidays are excluded
-from the computation.
+Unmarked weekdays count as work from home; leaves, holidays, and mandated
+work-from-home periods are excluded from the computation.
 
 Stack: Next.js (App Router) · Drizzle ORM · Neon Postgres · Auth.js v5
 (Google OAuth). See `docs/architecture.md` and `docs/decisions/` for design
@@ -48,6 +48,9 @@ Open http://localhost:3000, sign in with Google, tap days.
 The 40% requirement is the default. If your policy changed for a stretch of months
 (ours dropped to 20% during a fuel price spike), record that range under **Settings** and
 those months are scored at the lower rate — including retroactively.
+
+Business-mandated work-from-home periods go in the same place, as date ranges —
+leave the end date blank while the mandate is open-ended.
 
 ## Verify
 
