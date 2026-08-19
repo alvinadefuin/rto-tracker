@@ -8,9 +8,7 @@ must not count toward the monthly requirement.
 
 Nothing existing expressed it. Tapping days as `leave` or `holiday` records the
 wrong reason, and an open-ended range has no finite set of days to tap. A 0%
-`rto_targets` period is month-granular, so it cannot express "from 12 August",
-and it would report a misleading achieved percentage against days that were
-never owed.
+`rto_targets` period cannot express a mid-month start.
 
 ## Decision
 
@@ -22,9 +20,10 @@ are dropped.
 Rejected alternatives:
 
 - **A 0% target period.** Month granularity cannot split the month the mandate
-  began in, and it conflates *what percent applies* with *which days count*.
-  Sharing `rto_targets`' overlap check would also forbid a mandate inside a 20%
-  period, which is the real case.
+  began in, and it conflates *what percent applies* with *which days count* —
+  the days stay in the eligible pool, so the month reports a misleading achieved
+  percentage against days that were never owed. Sharing `rto_targets`' overlap
+  check would also forbid a mandate inside a 20% period, which is the real case.
 - **A fourth `day_status` enum value.** Reuses the whole day-entry pipeline, but
   "until further notice" has no end, so rows could only be materialised lazily
   as months are visited — a write during a server render. It also cannot hold an
@@ -36,8 +35,11 @@ Rejected alternatives:
   August's 21 weekdays eligible, so 3 office days are required instead of 9.
 - A mandate beats any recorded status. An `office` stamp inside the window is
   kept as a record and rendered, but excluded from `officeDays`, so
-  `officeDays ≤ eligibleDays` holds and `achievedPercent` cannot exceed 100.
-- A mandated day that is also marked leave is counted once, as mandated.
+  `officeDays ≤ eligibleDays` holds and `achievedPercent` cannot exceed 100; a
+  mandated day also marked leave is likewise counted once, as mandated.
+- A weekend-only mandate is permitted — only calendar validity is checked, not
+  weekday-ness — so its delete dialog reads "0 working days will count toward
+  your requirement again". Harmless and expected, not a bug.
 - Dates are `YYYY-MM-DD` text, so all range logic is pure string comparison —
   the same reasoning as month keys in 0002 and day keys throughout.
 - Overlaps are rejected at write time; gaps are normal.
