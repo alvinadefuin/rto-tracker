@@ -109,7 +109,8 @@ Cycling a day back to WFH deletes the row.
 Eligible days = weekdays − mandated − holidays − leaves. Required =
 `ceil(eligible × targetPercent / 100)`
 (rounds up deliberately: 22 eligible at 40% → 9, since 8 would be 36%). The per-week
-Mon–Fri breakdown is informational — the requirement is monthly.
+Mon–Fri breakdown is informational — the requirement is computed per month and assessed
+across the financial year.
 
 **The target rate is per date range, not a constant.** `rto_targets` holds closed periods
 (`start_month`, `end_month`, `percent`) per user; `end_month` NULL means ongoing. Months
@@ -134,15 +135,21 @@ because `eligibleDays === 0` now has two causes and the copy differs between the
 named for the calendar year it ends in: FY2027 is Aug 2026 – Jul 2027
 (`FY_START_MONTH = 8`). Within a year a surplus settles a shortfall — miss a day in
 February, work an extra in March, and the year is level — and nothing crosses the July
-boundary. `computeFyStats` sums `eligibleDays × percent` per month into
-`weightedEligible`, in **percent-points and deliberately un-rounded**, then divides by
-100 and rounds up exactly once for the year. Rounding per month instead costs about six
-office days a year, so never sum per-month `requiredDays`.
+boundary. `aggregateMonths` owns the per-month loop: it sums `eligibleDays × percent`
+into `weightedEligible`, in **percent-points and deliberately un-rounded**.
+`computeFyStats` adds only the displayed month's own contribution to that already-summed
+baseline, then divides by 100 and rounds up exactly once for the year. Rounding per
+month instead costs about six office days a year, so never sum per-month
+`requiredDays`.
 
-**The FY on screen follows the month on screen, never the clock.** `financialYearOf`
-takes a month key for the same reason today's date is resolved client-side only: a
-window keyed off `new Date()` would make server output timezone-dependent. It also means
-browsing last July shows that year's verdict.
+**The FY on screen follows the displayed month; the clock is read once, to choose the
+default month.** `financialYearOf` takes a month key for the same reason today's date is
+resolved client-side only: a window keyed off `new Date()` would make server output
+timezone-dependent. It also means browsing last July shows that year's verdict. But with
+no usable `?m=` there is no month to follow, and `currentMonthKey()` in `page.tsx` reads
+`new Date()` through **local** getters — so the default month, and with it the default
+FY, is server-timezone-dependent, and near 31 Jul / 1 Aug that month boundary is also an
+FY boundary.
 
 The FY window starts at the later of the FY's first month and the month of the user's
 earliest `day_entries` row, so an FY that predates the app reports nothing rather than a
@@ -156,9 +163,13 @@ year's bounds.
 
 ### Data flow
 
-`src/app/page.tsx` (server component) gates on `auth()`, reads the month from `?m=YYYY-MM`
-(`searchParams` is a Promise in this Next version — `await` it), queries `day_entries` for
-the session user, and hands a plain `Entries` map to `<Calendar>`.
+`src/app/page.tsx` (server component) gates on `auth()` and reads the month from `?m=` —
+either a `YYYY-MM` key or a whole `YYYY-MM-DD` day, which `toMonthKey` truncates to its
+month (`searchParams` is a Promise in this Next version — `await` it). It then queries
+`day_entries` and `wfh_mandates` across the whole FY window rather than the displayed
+month alone — the window is one month wide only in August, or when nothing was recorded
+before the displayed month — and hands `<Calendar>` a plain `Entries` map of just that
+month's rows, alongside the `FyBaseline` for the months before it.
 
 **`<Calendar>` must keep its `key={monthKey}`.** Next does not remount on search-param
 changes, and Calendar seeds its state from `initialEntries` only on mount — so without the

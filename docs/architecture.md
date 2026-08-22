@@ -42,7 +42,9 @@ parsing of strings — UTC component math only, to avoid timezone drift).
   Jul 2027). Compliance is cumulative within a year and resets at the boundary
 - FY required office days = `ceil(Σ(eligible_m × percent_m) / 100)` — one rounding step
   for the year, not one per month
-- The FY shown is the one containing the *displayed* month, never the current date
+- The FY shown is the one containing the *displayed* month; the clock is read only to
+  pick the default month when `?m=` is absent, through local getters, so that one
+  choice is server-timezone-dependent — and near 31 Jul / 1 Aug it is an FY boundary
 - The FY window starts no earlier than the month of the first recorded day
 
 ## Data flow
