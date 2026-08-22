@@ -416,6 +416,28 @@ export function aggregateMonths(
 }
 
 /**
+ * First month to count for `monthKey`'s FY, or null when there is no record to
+ * carry.
+ *
+ * `null` when nothing was ever recorded, and when the record starts after the
+ * displayed month — in which case there is no history to carry and the
+ * displayed month is empty too, `trackingStart` being the earliest row there
+ * is. Otherwise the later of the two: browsing an FY that predates the app must
+ * not report a hundred-day deficit for months that were never recorded.
+ *
+ * Pure fixed-width string comparison, so it lives here rather than in the page:
+ * it is the subtlest rule in the feature and the only one a page could hide.
+ */
+export function fyWindowStart(
+  monthKey: string,
+  fyStartMonth: string,
+  trackingStart: string | null
+): string | null {
+  if (trackingStart === null || trackingStart > monthKey) return null;
+  return trackingStart > fyStartMonth ? trackingStart : fyStartMonth;
+}
+
+/**
  * What the months before the displayed one contribute. Only the two facts a
  * caller cannot derive: everything else about the year follows from the month
  * key, and holding derived copies here is how a baseline whose FY bounds

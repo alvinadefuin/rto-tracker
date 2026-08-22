@@ -23,6 +23,7 @@ import {
   monthsBetween,
   mandateTouchesMonth,
   aggregateMonths,
+  fyWindowStart,
   computeFyStats,
   fyVerdict,
   type Entries,
@@ -899,6 +900,33 @@ describe("aggregateMonths", () => {
       officeDays: 0,
       weightedEligible: 0,
     });
+  });
+});
+
+describe("fyWindowStart", () => {
+  // Oct 2026 sits in FY2027, which starts Aug 2026.
+  const OCT = "2026-10";
+  const FY_START = "2026-08";
+
+  it("returns null when nothing was ever recorded", () => {
+    expect(fyWindowStart(OCT, FY_START, null)).toBeNull();
+  });
+
+  it("returns null when the record starts after the displayed month", () => {
+    expect(fyWindowStart(OCT, FY_START, "2026-11")).toBeNull();
+  });
+
+  it("counts from the displayed month when the record starts in it", () => {
+    expect(fyWindowStart(OCT, FY_START, OCT)).toBe(OCT);
+  });
+
+  it("counts from the record's start when it falls inside the FY", () => {
+    expect(fyWindowStart(OCT, FY_START, "2026-09")).toBe("2026-09");
+  });
+
+  it("counts from the FY's start when the record predates it", () => {
+    expect(fyWindowStart(OCT, FY_START, "2025-03")).toBe(FY_START);
+    expect(fyWindowStart(OCT, FY_START, FY_START)).toBe(FY_START);
   });
 });
 

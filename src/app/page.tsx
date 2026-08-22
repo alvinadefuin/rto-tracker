@@ -9,6 +9,7 @@ import {
   financialYearBounds,
   financialYearOf,
   formatDate,
+  fyWindowStart,
   mandateTouchesMonth,
   monthsBetween,
   resolvePercent,
@@ -67,17 +68,7 @@ export default async function Home({
     .where(eq(dayEntries.userId, session.user.id));
   const trackingStart = firstRow?.first ? firstRow.first.slice(0, 7) : null;
 
-  // Later of the FY's first month and the month tracking began: browsing an FY
-  // that predates the app must not report a hundred-day deficit for months that
-  // were never recorded. null when nothing exists at or before this month — in
-  // which case there is no history to carry, and the displayed month is empty
-  // too, trackingStart being the earliest row there is.
-  const windowStart =
-    trackingStart === null || trackingStart > monthKey
-      ? null
-      : trackingStart > fyStartMonth
-        ? trackingStart
-        : fyStartMonth;
+  const windowStart = fyWindowStart(monthKey, fyStartMonth, trackingStart);
   const queryStart = windowStart ?? monthKey;
 
   const rows = await db
