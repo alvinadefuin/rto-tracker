@@ -834,11 +834,20 @@ Leave `AUTH_SECRET`, `AUTH_GOOGLE_ID`, and `AUTH_GOOGLE_SECRET` untouched.
 
 Run: `npx drizzle-kit check`
 
-There is no `drizzle/` directory yet, so this may report nothing to check or may complain
-that the folder is missing — either is acceptable and neither is the point. What matters
-is that it does **not** print `DATABASE_URL is not set in .env.local`. That message would
-mean the rewritten config is not reading `.env.local`, and Task 4 would fail next. The
-config is properly exercised by `npm run db:generate` in Task 4.
+Expected: `Everything's fine`, and — this is the actual point — **no**
+`DATABASE_URL is not set in .env.local`. That message would mean the rewritten config is
+not reading `.env.local`, and Task 4 would fail next. The config is properly exercised by
+`npm run db:generate` in Task 4.
+
+**`check` has a side effect: it creates an empty `drizzle/meta/_journal.json`.** That stub
+is not gitignored and must not be carried into Task 4, where `generate` would be working
+against a journal that already exists. Remove it before committing:
+
+```bash
+rm -rf drizzle && ls -a drizzle 2>&1 | head -1
+```
+
+Expected: `ls: drizzle: No such file or directory`. Task 4 creates the real one.
 
 - [ ] **Step 5: Verify the removed scripts are gone**
 
