@@ -37,7 +37,7 @@ parsing of strings — UTC component math only, to avoid timezone drift).
   comes from `rto_targets` for that month, defaulting to 40
 - RTO % = office ÷ eligible (0 when eligible is 0)
 - Weekly breakdown: Mon–Fri chunks, partial chunks at month edges — informational
-  only; the 40% requirement is monthly.
+  only. The requirement is computed per month and assessed across the financial year
 - Financial years run Aug–Jul, named for the year they end in (FY2027 = Aug 2026 –
   Jul 2027). Compliance is cumulative within a year and resets at the boundary
 - FY required office days = `ceil(Σ(eligible_m × percent_m) / 100)` — one rounding step
