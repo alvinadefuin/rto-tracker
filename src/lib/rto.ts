@@ -521,16 +521,23 @@ const plural = (n: number, one: string, many: string) =>
  * DOM: eight branches are worth asserting, and in JSX they could not be.
  */
 export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
-  // Only the branches that name the year carry this: "FY2027 met" from two
-  // months of data is a false claim, and the block's header line is not the
-  // claim — this sentence is.
+  // Only the branches that name the year carry this: "FY2027 fully covered"
+  // from two months of data is a false claim, and the block's header line is
+  // not the claim — this sentence is.
   const windowNote = fy.isPartialWindow
     ? ` (counted from ${formatMonth(fy.windowStartMonth)})`
     : "";
 
   if (fy.balance > 0) {
     const ahead = `${plural(fy.balance, "day", "days")} ahead`;
-    if (fy.isFinalMonth) return `${ahead} — FY${fy.fy} met${windowNote}.`;
+    // `isFinalMonth` is a month comparison — monthKey === fyEndMonth — not a
+    // statement about time. Nothing here reads a clock, so eleven presses of
+    // the next-month arrow land in this branch for a July that has not
+    // happened. What is true either way is that the window now spans all
+    // twelve months, so the figures are the full year's rather than a
+    // year-to-date slice. Never word these three as if the year had ended.
+    if (fy.isFinalMonth)
+      return `${ahead} — FY${fy.fy} fully covered${windowNote}.`;
     // The claim holds because cumulativeRequired already includes the displayed
     // month's whole requirement: a non-negative balance means the month's
     // remaining days are paid for. Do not "fix" the apparent contradiction of
@@ -559,12 +566,12 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
 
   if (fy.balance === 0) {
     return fy.isFinalMonth
-      ? `Level — FY${fy.fy} met exactly${windowNote}.`
+      ? `Level — FY${fy.fy} covered exactly${windowNote}.`
       : "Level — no days banked.";
   }
 
   const owed = -fy.balance;
   return fy.isFinalMonth
-    ? `${plural(owed, "office day", "office days")} short — FY${fy.fy} not met${windowNote}.`
+    ? `${plural(owed, "office day", "office days")} short of FY${fy.fy}'s full year${windowNote}.`
     : `${plural(owed, "more office day", "more office days")} needed to be level.`;
 }

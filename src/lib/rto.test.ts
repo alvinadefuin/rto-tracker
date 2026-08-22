@@ -1117,9 +1117,9 @@ describe("fyVerdict", () => {
     ).toBe("3 days ahead — banked toward later months.");
   });
 
-  it("declares the year met on a surplus in the final month", () => {
+  it("reports a surplus against the whole year in July", () => {
     expect(fyVerdict(stats({ isFinalMonth: true }), month(0))).toBe(
-      "3 days ahead — FY2027 met."
+      "3 days ahead — FY2027 fully covered."
     );
   });
 
@@ -1135,13 +1135,13 @@ describe("fyVerdict", () => {
     );
   });
 
-  it("reports an exactly met year in the final month", () => {
+  it("reports the whole year covered exactly in July", () => {
     expect(
       fyVerdict(
         stats({ balance: 0, isFinalMonth: true, cumulativeOffice: 26 }),
         month(0)
       )
-    ).toBe("Level — FY2027 met exactly.");
+    ).toBe("Level — FY2027 covered exactly.");
   });
 
   it("reports being level mid-year", () => {
@@ -1150,13 +1150,35 @@ describe("fyVerdict", () => {
     );
   });
 
-  it("declares the year missed on a shortfall in the final month", () => {
+  it("reports a shortfall against the whole year in July", () => {
     expect(
       fyVerdict(
         stats({ balance: -2, isFinalMonth: true, cumulativeOffice: 24 }),
         month(0)
       )
-    ).toBe("2 office days short — FY2027 not met.");
+    ).toBe("2 office days short of FY2027's full year.");
+  });
+
+  // isFinalMonth means only that the displayed month is July, and nothing in
+  // fyVerdict reads a clock — so a July years from now lands in the same
+  // branch. It must not condemn a year that has not happened.
+  it("reads a future July as short of the full year, not as a failed one", () => {
+    const verdict = fyVerdict(
+      stats({
+        fy: 2031,
+        fyStartMonth: "2030-08",
+        fyEndMonth: "2031-07",
+        windowStartMonth: "2030-08",
+        isFinalMonth: true,
+        cumulativeOffice: 0,
+        cumulativeRequired: 103,
+        balance: -103,
+        remainingNeeded: 103,
+      }),
+      month(9)
+    );
+    expect(verdict).toBe("103 office days short of FY2031's full year.");
+    expect(verdict).not.toContain("not met");
   });
 
   it("asks for the shortfall mid-year", () => {
@@ -1172,7 +1194,7 @@ describe("fyVerdict", () => {
     const partial = { isPartialWindow: true, windowStartMonth: "2027-06" };
     expect(
       fyVerdict(stats({ ...partial, isFinalMonth: true }), month(0))
-    ).toBe("3 days ahead — FY2027 met (counted from Jun 2027).");
+    ).toBe("3 days ahead — FY2027 fully covered (counted from Jun 2027).");
     expect(
       fyVerdict(
         stats({
@@ -1183,7 +1205,9 @@ describe("fyVerdict", () => {
         }),
         month(0)
       )
-    ).toBe("2 office days short — FY2027 not met (counted from Jun 2027).");
+    ).toBe(
+      "2 office days short of FY2027's full year (counted from Jun 2027)."
+    );
     expect(
       fyVerdict(
         stats({
@@ -1194,7 +1218,7 @@ describe("fyVerdict", () => {
         }),
         month(0)
       )
-    ).toBe("Level — FY2027 met exactly (counted from Jun 2027).");
+    ).toBe("Level — FY2027 covered exactly (counted from Jun 2027).");
   });
 
   it("leaves mid-year sentences unqualified — they name no year", () => {
@@ -1230,6 +1254,6 @@ describe("fyVerdict", () => {
         }),
         month(1)
       )
-    ).toBe("1 office day short — FY2027 not met.");
+    ).toBe("1 office day short of FY2027's full year.");
   });
 });
