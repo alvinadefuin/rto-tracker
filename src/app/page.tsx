@@ -136,8 +136,10 @@ export default async function Home({
       .map((r) => [r.date, r.status])
   );
 
-  // The banner announces this month's mandates only; the widened query above
-  // would otherwise list ones that ended months ago.
+  // Everything scoped to the displayed month — the banner below and Calendar —
+  // takes this list; the widened query above would otherwise surface mandates
+  // that ended months ago. A mandate that touches no day of the month can
+  // change nothing about it, so the narrowing is exact.
   const monthMandates = mandates.filter((x) =>
     mandateTouchesMonth(x, monthKey)
   );
