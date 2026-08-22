@@ -24,11 +24,13 @@ import {
   mandateTouchesMonth,
   aggregateMonths,
   computeFyStats,
+  fyVerdict,
   type Entries,
   type TargetPeriod,
   type WfhMandate,
   type FyContext,
   type MonthsAggregate,
+  type FyStats,
 } from "./rto";
 
 // Jan 2026: 31 days, starts Thu, 22 weekdays. ceil(0.4*22)=9.
@@ -1028,5 +1030,94 @@ describe("computeFyStats", () => {
     expect(fy.cumulativeOffice).toBe(0);
     expect(fy.balance).toBe(0);
     expect(fy.remainingNeeded).toBe(0);
+  });
+});
+
+describe("fyVerdict", () => {
+  function stats(overrides: Partial<FyStats> = {}): FyStats {
+    return {
+      fy: 2027,
+      fyStartMonth: "2026-08",
+      fyEndMonth: "2027-07",
+      windowStartMonth: "2026-08",
+      isPartialWindow: false,
+      isFinalMonth: false,
+      cumulativeOffice: 29,
+      cumulativeRequired: 26,
+      balance: 3,
+      remainingNeeded: 0,
+      ...overrides,
+    };
+  }
+
+  it("says nothing was owed when the whole window was mandated", () => {
+    expect(fyVerdict(stats({ cumulativeRequired: 0, balance: 0 }), 0)).toBe(
+      "No requirement so far — every counted day was mandated WFH."
+    );
+  });
+
+  it("declares the year met on a surplus in the final month", () => {
+    expect(fyVerdict(stats({ isFinalMonth: true }), 0)).toBe(
+      "3 days ahead — FY2027 met."
+    );
+  });
+
+  it("says the surplus covers the month's remaining days", () => {
+    expect(fyVerdict(stats(), 3)).toBe(
+      "3 days ahead — this month's 3 remaining days are covered."
+    );
+  });
+
+  it("banks a surplus when the month is already covered", () => {
+    expect(fyVerdict(stats(), 0)).toBe(
+      "3 days ahead — banked toward later months."
+    );
+  });
+
+  it("reports an exactly met year in the final month", () => {
+    expect(
+      fyVerdict(stats({ balance: 0, isFinalMonth: true, cumulativeOffice: 26 }), 0)
+    ).toBe("Level — FY2027 met exactly.");
+  });
+
+  it("reports being level mid-year", () => {
+    expect(fyVerdict(stats({ balance: 0, cumulativeOffice: 26 }), 0)).toBe(
+      "Level — no days banked."
+    );
+  });
+
+  it("declares the year missed on a shortfall in the final month", () => {
+    expect(
+      fyVerdict(
+        stats({ balance: -2, isFinalMonth: true, cumulativeOffice: 24 }),
+        0
+      )
+    ).toBe("2 office days short — FY2027 not met.");
+  });
+
+  it("asks for the shortfall mid-year", () => {
+    expect(
+      fyVerdict(stats({ balance: -2, cumulativeOffice: 24, remainingNeeded: 2 }), 2)
+    ).toBe("2 more office days needed to be level.");
+  });
+
+  it("uses singular forms for one day", () => {
+    expect(fyVerdict(stats({ balance: 1, cumulativeOffice: 27 }), 1)).toBe(
+      "1 day ahead — this month's 1 remaining day is covered."
+    );
+    expect(
+      fyVerdict(stats({ balance: -1, cumulativeOffice: 25, remainingNeeded: 1 }), 1)
+    ).toBe("1 more office day needed to be level.");
+    expect(
+      fyVerdict(
+        stats({
+          balance: -1,
+          cumulativeOffice: 25,
+          remainingNeeded: 1,
+          isFinalMonth: true,
+        }),
+        1
+      )
+    ).toBe("1 office day short — FY2027 not met.");
   });
 });

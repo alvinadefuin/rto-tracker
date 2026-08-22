@@ -462,3 +462,43 @@ export function computeFyStats(ctx: FyContext, month: MonthStats): FyStats {
     remainingNeeded: Math.max(0, -balance),
   };
 }
+
+const dayCount = (n: number) => (n === 1 ? "1 day" : `${n} days`);
+const officeDayCount = (n: number) =>
+  n === 1 ? "1 office day" : `${n} office days`;
+
+/**
+ * The one sentence saying what the financial year still owes. `monthRemaining`
+ * is the displayed month's own shortfall, used only to say that a bank covers
+ * it.
+ *
+ * Copy lives here rather than in the component because Vitest runs without a
+ * DOM: eight branches are worth asserting, and in JSX they could not be.
+ */
+export function fyVerdict(fy: FyStats, monthRemaining: number): string {
+  if (fy.cumulativeRequired === 0) {
+    return "No requirement so far — every counted day was mandated WFH.";
+  }
+
+  if (fy.balance > 0) {
+    const ahead = `${dayCount(fy.balance)} ahead`;
+    if (fy.isFinalMonth) return `${ahead} — FY${fy.fy} met.`;
+    if (monthRemaining > 0) {
+      return `${ahead} — this month's ${monthRemaining} remaining ${
+        monthRemaining === 1 ? "day is" : "days are"
+      } covered.`;
+    }
+    return `${ahead} — banked toward later months.`;
+  }
+
+  if (fy.balance === 0) {
+    return fy.isFinalMonth
+      ? `Level — FY${fy.fy} met exactly.`
+      : "Level — no days banked.";
+  }
+
+  const owed = -fy.balance;
+  return fy.isFinalMonth
+    ? `${officeDayCount(owed)} short — FY${fy.fy} not met.`
+    : `${owed === 1 ? "1 more office day" : `${owed} more office days`} needed to be level.`;
+}
