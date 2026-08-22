@@ -551,9 +551,11 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
   // leave reaches a zero requirement with days still banked, and the surplus is
   // then the news. Reachable only with balance === 0, since balance equals
   // cumulativeOffice when nothing is required — so no branch below is shadowed.
-  // Worded without naming a cause: a mandate is one of several ways here.
+  // Worded without naming a cause OR an eligibility count: a mandate, a month of
+  // leave, and a 0% period all land here, and the last one has eligible days that
+  // were counted and then weighted to zero.
   if (fy.cumulativeRequired === 0) {
-    return "No requirement — no eligible working days counted.";
+    return "No requirement — the year owes nothing.";
   }
 
   if (fy.balance === 0) {

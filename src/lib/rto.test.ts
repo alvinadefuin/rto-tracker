@@ -1103,7 +1103,7 @@ describe("fyVerdict", () => {
         stats({ cumulativeRequired: 0, cumulativeOffice: 0, balance: 0 }),
         month(0)
       )
-    ).toBe("No requirement — no eligible working days counted.");
+    ).toBe("No requirement — the year owes nothing.");
   });
 
   it("reports a surplus banked against a zero requirement", () => {
