@@ -280,7 +280,6 @@ export function toMonthKey(value: string): string | null {
   return null;
 }
 
-
 function toDateString(year: number, month: number, day: number): string {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
