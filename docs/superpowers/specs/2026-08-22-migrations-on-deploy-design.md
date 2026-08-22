@@ -158,34 +158,41 @@ a pure function.
 
 ```js
 /**
- * @param {{ VERCEL_ENV?: string }} env
+ * @param {{ VERCEL?: string, VERCEL_ENV?: string }} env
  * @returns {{ run: boolean, reason: string }}
  */
 export function shouldMigrate(env) {
-  if (env.VERCEL_ENV === undefined) {
-    return { run: true, reason: "no VERCEL_ENV — local run, targeting DATABASE_URL" };
+  const onVercel = env.VERCEL !== undefined || env.VERCEL_ENV !== undefined;
+
+  if (!onVercel) {
+    return { run: true, reason: "local run — applying to DATABASE_URL from .env.local" };
   }
   if (env.VERCEL_ENV === "production") {
-    return { run: true, reason: "production deploy" };
+    return { run: true, reason: "Vercel production deploy" };
   }
-  return { run: false, reason: `skipped — VERCEL_ENV=${env.VERCEL_ENV}` };
+  return {
+    run: false,
+    reason: `skipped — on Vercel with VERCEL_ENV=${env.VERCEL_ENV ?? "(unset)"}`,
+  };
 }
 ```
 
-Default-deny on anything that is neither production nor absent. `VERCEL_ENV` is
-`production`, `preview`, or `development` on Vercel and unset on a laptop, so a preview
+Default-deny, and specifically default-deny *on Vercel*. Testing `VERCEL_ENV` alone would
+be unsafe: if a Vercel build ever lacked that variable, an absent value would read as
+"laptop" and the script would migrate whatever `DATABASE_URL` is scoped to that
+environment. `VERCEL` is always set on Vercel, so requiring an explicit
+`VERCEL_ENV === "production"` once either variable is present closes that hole. A preview
 build cannot reach production no matter how `DATABASE_URL` is scoped.
 
-One benign edge, worth knowing rather than verified in this repo: `vercel env pull` is
-reported to write `VERCEL_ENV="development"` into `.env.local`. A laptop that has run it
-would *skip* rather than migrate, and print the reason. Failing closed is the right
-direction, and the printed reason explains itself. Worth confirming during
-implementation, since it changes nothing if true and nothing if false.
+The guard is applied to the **real process environment, before `.env.local` is loaded**.
+`vercel env pull` is reported to write `VERCEL_ENV` into that file, and a value from a
+file must not be able to change whether the process believes it is running on Vercel.
+Reading the environment first makes that edge case inert in both directions.
 
 `scripts/migrate.mjs` then:
 
-1. Loads `.env.local` **only when running locally**, via a dynamic
-   `await import("dotenv")` guarded by the same absent-`VERCEL_ENV` check. `dotenv` is a
+1. Loads `.env.local` **only when running locally** — that is, only when neither `VERCEL`
+   nor `VERCEL_ENV` is present — via a dynamic `await import("dotenv")`. `dotenv` is a
    devDependency, so a top-level import would make the production build path depend on a
    dev-only package; the dynamic guarded form keeps the deploy path free of every
    devDependency. On Vercel the variables are already in the environment.
@@ -309,14 +316,16 @@ precedence is load-bearing for the emergency path, so the implementation must no
 `scripts/should-migrate.test.mjs`, discovered by vitest's default include patterns and
 running in the existing `node` environment. No new dependencies.
 
-- `VERCEL_ENV` absent → `run: true`
-- `VERCEL_ENV: "production"` → `run: true`
-- `VERCEL_ENV: "preview"` → `run: false` — the case that protects production
-- `VERCEL_ENV: "development"` → `run: false`
-- `VERCEL_ENV: ""` → `run: false`, proving the check is not truthiness
-- `VERCEL_ENV: "Production"` → `run: false`, proving it is not case-folded
-- the `reason` string names the offending value on every skip, so a build log explains
-  itself
+- `{}` — no Vercel variables at all → `run: true`, the laptop case
+- `{ VERCEL: "1", VERCEL_ENV: "production" }` → `run: true`
+- `{ VERCEL: "1", VERCEL_ENV: "preview" }` → `run: false` — the case that protects production
+- `{ VERCEL: "1", VERCEL_ENV: "development" }` → `run: false`
+- `{ VERCEL: "1" }` — on Vercel with `VERCEL_ENV` missing → `run: false`, the hardening
+- `{ VERCEL_ENV: "production" }` → `run: true`, covering a build env that sets only the one
+- `{ VERCEL_ENV: "" }` → `run: false`, proving the check is not truthiness
+- `{ VERCEL: "1", VERCEL_ENV: "Production" }` → `run: false`, proving it is not case-folded
+- the `reason` names the offending value on a skip, and says `(unset)` when there is none,
+  so a build log explains itself
 
 This is a documented extension of the convention that only `src/lib/rto.ts` is
 unit-tested. The guard is not domain logic, but it is the only thing preventing a
