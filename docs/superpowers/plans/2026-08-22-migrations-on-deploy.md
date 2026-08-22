@@ -419,13 +419,15 @@ describe("withoutSecrets", () => {
   });
 
   it("treats a secret with regex metacharacters literally", () => {
-    // Pins the split/join implementation. A naive new RegExp(secret) would let "." match
-    // any character and could corrupt or under-redact.
-    const secret = "a.b?c$d(e)f[g]h";
-    expect(withoutSecrets(new Error(`saw ${secret}`), [secret])).toBe(
-      withoutSecrets(new Error(`saw ${secret}`), [secret]).replace(secret, "[redacted]")
-    );
-    expect(withoutSecrets(new Error("saw aXbYcZdEeFfGgHh"), [secret])).toContain("aXbYcZdEeFfGgHh");
+    // Pins the split/join implementation. `new RegExp("a.c")` matches "abc" as well, so a
+    // regex-based scrubber would redact the near-miss; split/join must redact only the
+    // literal secret and leave the near-miss untouched.
+    expect(withoutSecrets(new Error("saw a.c"), ["a.c"])).toContain("saw [redacted]");
+    expect(withoutSecrets(new Error("saw abc"), ["a.c"])).toContain("saw abc");
+
+    // And a password full of metacharacters is still removed in full.
+    const messy = "p$ss(w)rd[1]?";
+    expect(withoutSecrets(new Error(`auth failed for ${messy}`), [messy])).not.toContain(messy);
   });
 
   it("keeps the stack when there is one, so a failure stays debuggable", () => {
