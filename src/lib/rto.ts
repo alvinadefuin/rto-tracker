@@ -55,6 +55,11 @@ export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean {
   );
 }
 
+// Defined here rather than beside the other string helpers below: the month-key
+// builders above are its first callers, and define-before-use keeps the file
+// readable top to bottom.
+const pad = (n: number) => String(n).padStart(2, "0");
+
 /**
  * Financial years start in August. Hardcoded rather than configurable: one
  * employer, one calendar. The maths below assumes a start month after January,
@@ -275,7 +280,6 @@ export function toMonthKey(value: string): string | null {
   return null;
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
 
 function toDateString(year: number, month: number, day: number): string {
   return `${year}-${pad(month)}-${pad(day)}`;
