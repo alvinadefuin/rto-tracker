@@ -38,6 +38,12 @@ parsing of strings — UTC component math only, to avoid timezone drift).
 - RTO % = office ÷ eligible (0 when eligible is 0)
 - Weekly breakdown: Mon–Fri chunks, partial chunks at month edges — informational
   only; the 40% requirement is monthly.
+- Financial years run Aug–Jul, named for the year they end in (FY2027 = Aug 2026 –
+  Jul 2027). Compliance is cumulative within a year and resets at the boundary
+- FY required office days = `ceil(Σ(eligible_m × percent_m) / 100)` — one rounding step
+  for the year, not one per month
+- The FY shown is the one containing the *displayed* month, never the current date
+- The FY window starts no earlier than the month of the first recorded day
 
 ## Data flow
 
@@ -47,6 +53,11 @@ component: tapping a weekday cycles WFH → Office → Leave → Holiday → WFH
 updates optimistically, and persists via the `setDayStatus` server action
 (upsert, or delete when cycling back to WFH). On failure the cell reverts and a
 toast is shown.
+
+The page also loads the FY-to-date window — entries and mandates from the FY's first
+counted month through the displayed month — and passes the earlier months to the client
+as a two-number aggregate, so the calendar can recompute the year's position locally
+after each tap.
 
 ## Schema delivery
 

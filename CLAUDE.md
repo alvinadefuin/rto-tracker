@@ -117,6 +117,9 @@ covered by no period use `DEFAULT_RTO_PERCENT` (40). Month keys are `YYYY-MM` **
 range checks are pure string comparisons — same reasoning as day keys. Overlapping periods
 are rejected in `settings-actions.ts`; gaps are intentional and mean "use the default".
 `resolvePercent` lives outside `computeMonthStats` so each is separately testable.
+The settings form posts whole `YYYY-MM-DD` dates from a date picker and `toMonthKey`
+truncates them; `rto_targets` still stores `YYYY-MM`, and nothing downstream of the
+action ever sees a day.
 
 **Mandated WFH days are excluded outright.** `wfh_mandates` holds inclusive day ranges
 (`start_date`, `end_date`) per user; `end_date` NULL means until further notice. Dates are
@@ -126,6 +129,27 @@ month keys. Overlaps are rejected in `mandate-actions.ts`. A mandate wins over a
 rendered (faded, as a record) but excluded from `officeDays` — which is what keeps
 `officeDays ≤ eligibleDays` and `achievedPercent ≤ 100`. `MonthStats.mandatedDays` exists
 because `eligibleDays === 0` now has two causes and the copy differs between them.
+
+**Compliance is cumulative within a financial year, which runs Aug–Jul.** An FY is
+named for the calendar year it ends in: FY2027 is Aug 2026 – Jul 2027
+(`FY_START_MONTH = 8`). Within a year a surplus settles a shortfall — miss a day in
+February, work an extra in March, and the year is level — and nothing crosses the July
+boundary. `computeFyStats` sums `eligibleDays × percent` per month into
+`weightedEligible`, in **percent-points and deliberately un-rounded**, then divides by
+100 and rounds up exactly once for the year. Rounding per month instead costs about six
+office days a year, so never sum per-month `requiredDays`.
+
+**The FY on screen follows the month on screen, never the clock.** `financialYearOf`
+takes a month key for the same reason today's date is resolved client-side only: a
+window keyed off `new Date()` would make server output timezone-dependent. It also means
+browsing last July shows that year's verdict.
+
+The FY window starts at the later of the FY's first month and the month of the user's
+earliest `day_entries` row, so an FY that predates the app reports nothing rather than a
+hundred-day deficit. `page.tsx` hands `<Calendar>` an `FyContext` holding **two numbers**
+for the prior months, not their entries — only the displayed month is editable from that
+view, so the client adds its live month to a fixed prior and re-runs the same single
+`ceil`.
 
 ### Data flow
 
