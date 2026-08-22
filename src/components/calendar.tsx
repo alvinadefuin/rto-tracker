@@ -10,7 +10,7 @@ import {
   isWeekend,
   type DayStatus,
   type Entries,
-  type FyContext,
+  type FyBaseline,
   type WfhMandate,
 } from "@/lib/rto";
 import { Stats } from "@/components/stats";
@@ -73,20 +73,20 @@ function DayMark({
   );
 }
 
+// The displayed month arrives once, as a key: year and month are derived below
+// rather than passed alongside it, so there is nothing here that can disagree.
 export function Calendar({
-  year,
-  month,
+  monthKey,
   initialEntries,
   targetPercent,
   mandates,
-  fyContext,
+  fyBaseline,
 }: {
-  year: number;
-  month: number;
+  monthKey: string;
   initialEntries: Entries;
   targetPercent: number;
   mandates: WfhMandate[];
-  fyContext: FyContext | null;
+  fyBaseline: FyBaseline | null;
 }) {
   const [entries, setEntries] = useState<Entries>(initialEntries);
   const [toast, setToast] = useState<string | null>(null);
@@ -104,10 +104,13 @@ export function Calendar({
     () => null
   );
 
+  const [year, month] = monthKey.split("-").map(Number);
   const stats = computeMonthStats(year, month, entries, targetPercent, mandates);
   // Recomputed on every tap from the same fixed prior window: the months before
   // this one are not editable from here, so the only moving part is `entries`.
-  const fyStats = fyContext ? computeFyStats(fyContext, stats) : null;
+  const fyStats = fyBaseline
+    ? computeFyStats(monthKey, fyBaseline, stats)
+    : null;
   const weeks = monthGrid(year, month);
 
   function showToast(message: string) {

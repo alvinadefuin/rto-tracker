@@ -415,14 +415,19 @@ export function aggregateMonths(
   return { officeDays, weightedEligible };
 }
 
-export interface FyContext {
-  fy: number;
-  monthKey: string; // the displayed month, YYYY-MM
-  fyStartMonth: string; // the FY's own first month
-  fyEndMonth: string;
-  /** fyStartMonth, or later when the record began mid-year. */
+/**
+ * What the months before the displayed one contribute. Only the two facts a
+ * caller cannot derive: everything else about the year follows from the month
+ * key, and holding derived copies here is how a baseline whose FY bounds
+ * disagree with its month gets built.
+ */
+export interface FyBaseline {
+  /**
+   * First month counted for this FY — the FY's own start, or later when the
+   * record began mid-year.
+   */
   windowStartMonth: string;
-  /** Months from windowStartMonth up to, but not including, monthKey. */
+  /** Months from windowStartMonth up to, but not including, the displayed month. */
   prior: MonthsAggregate;
 }
 
@@ -440,26 +445,39 @@ export interface FyStats {
 }
 
 /**
- * Financial-year position through the displayed month, inclusive.
+ * Financial-year position through `monthKey`, inclusive.
+ *
+ * The year and its bounds are derived here from `monthKey` rather than taken
+ * from the caller: they are a function of it, and a caller that passed both
+ * could pass a July with another year's bounds and get isFinalMonth: false.
  *
  * The single Math.ceil here is the design: prior months contribute un-rounded
  * percent-points, the displayed month adds its own, and the year rounds up once.
  * Every field is derived from month keys and integers, so nothing consults the
  * clock and the client can recompute this after each tap.
  */
-export function computeFyStats(ctx: FyContext, month: MonthStats): FyStats {
-  const cumulativeOffice = ctx.prior.officeDays + month.officeDays;
+export function computeFyStats(
+  monthKey: string,
+  baseline: FyBaseline,
+  monthStats: MonthStats
+): FyStats {
+  const fy = financialYearOf(monthKey);
+  const { startMonth: fyStartMonth, endMonth: fyEndMonth } =
+    financialYearBounds(fy);
+
+  const cumulativeOffice = baseline.prior.officeDays + monthStats.officeDays;
   const weighted =
-    ctx.prior.weightedEligible + month.eligibleDays * month.targetPercent;
+    baseline.prior.weightedEligible +
+    monthStats.eligibleDays * monthStats.targetPercent;
   const cumulativeRequired = Math.ceil(weighted / 100);
   const balance = cumulativeOffice - cumulativeRequired;
   return {
-    fy: ctx.fy,
-    fyStartMonth: ctx.fyStartMonth,
-    fyEndMonth: ctx.fyEndMonth,
-    windowStartMonth: ctx.windowStartMonth,
-    isPartialWindow: ctx.windowStartMonth > ctx.fyStartMonth,
-    isFinalMonth: ctx.monthKey === ctx.fyEndMonth,
+    fy,
+    fyStartMonth,
+    fyEndMonth,
+    windowStartMonth: baseline.windowStartMonth,
+    isPartialWindow: baseline.windowStartMonth > fyStartMonth,
+    isFinalMonth: monthKey === fyEndMonth,
     cumulativeOffice,
     cumulativeRequired,
     balance,

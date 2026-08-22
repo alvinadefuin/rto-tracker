@@ -28,7 +28,7 @@ import {
   type Entries,
   type TargetPeriod,
   type WfhMandate,
-  type FyContext,
+  type FyBaseline,
   type MonthsAggregate,
   type FyStats,
   type MonthStats,
@@ -919,20 +919,22 @@ describe("computeFyStats", () => {
     "2026-10-08": "office",
   };
 
-  function octContext(prior: MonthsAggregate): FyContext {
-    return {
-      fy: 2027,
-      monthKey: "2026-10",
-      fyStartMonth: "2026-08",
-      fyEndMonth: "2027-07",
-      windowStartMonth: "2026-08",
-      prior,
-    };
+  // Aug 2026 is the FY's own start, so this window is the whole year.
+  function baseline(prior: MonthsAggregate): FyBaseline {
+    return { windowStartMonth: "2026-08", prior };
   }
+
+  it("derives the year and its bounds from the displayed month", () => {
+    const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
+    const fy = computeFyStats("2026-10", baseline(PRIOR_AUG_SEP), october);
+    expect(fy.fy).toBe(2027);
+    expect(fy.fyStartMonth).toBe("2026-08");
+    expect(fy.fyEndMonth).toBe("2027-07");
+  });
 
   it("rounds once on the FY total, not once per month", () => {
     const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
-    const fy = computeFyStats(octContext(PRIOR_AUG_SEP), october);
+    const fy = computeFyStats("2026-10", baseline(PRIOR_AUG_SEP), october);
     // 1720 + 22*40 = 2600 percent-points -> exactly 26 days.
     expect(fy.cumulativeRequired).toBe(26);
     // Summing monthly ceils would owe 27: ceil(8.4)+ceil(8.8)+ceil(8.8).
@@ -946,7 +948,7 @@ describe("computeFyStats", () => {
 
   it("adds the displayed month's office days to the prior window", () => {
     const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
-    const fy = computeFyStats(octContext(PRIOR_AUG_SEP), october);
+    const fy = computeFyStats("2026-10", baseline(PRIOR_AUG_SEP), october);
     expect(fy.cumulativeOffice).toBe(29);
     expect(fy.balance).toBe(3);
     expect(fy.remainingNeeded).toBe(0);
@@ -956,7 +958,8 @@ describe("computeFyStats", () => {
   it("carries a shortfall forward as days still owed", () => {
     const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
     const fy = computeFyStats(
-      octContext({ officeDays: 5, weightedEligible: 1720 }),
+      "2026-10",
+      baseline({ officeDays: 5, weightedEligible: 1720 }),
       october
     );
     expect(fy.cumulativeOffice).toBe(11);
@@ -970,17 +973,7 @@ describe("computeFyStats", () => {
     const prior: MonthsAggregate = { officeDays: 20, weightedEligible: 1100 };
     // Jul 2027 has 22 weekdays and nothing stamped.
     const july = computeMonthStats(2027, 7, {}, 40);
-    const fy = computeFyStats(
-      {
-        fy: 2027,
-        monthKey: "2027-07",
-        fyStartMonth: "2026-08",
-        fyEndMonth: "2027-07",
-        windowStartMonth: "2026-08",
-        prior,
-      },
-      july
-    );
+    const fy = computeFyStats("2027-07", baseline(prior), july);
     expect(july.requiredDays).toBe(9); // the month alone still asks for 9
     expect(fy.cumulativeRequired).toBe(20); // 1100 + 880 = 1980 -> ceil 19.8
     expect(fy.cumulativeOffice).toBe(20);
@@ -992,30 +985,40 @@ describe("computeFyStats", () => {
   it("flags the final month only in July", () => {
     const june = computeMonthStats(2027, 6, {}, 40);
     const notFinal = computeFyStats(
-      {
-        fy: 2027,
-        monthKey: "2027-06",
-        fyStartMonth: "2026-08",
-        fyEndMonth: "2027-07",
-        windowStartMonth: "2026-08",
-        prior: { officeDays: 0, weightedEligible: 0 },
-      },
+      "2027-06",
+      baseline({ officeDays: 0, weightedEligible: 0 }),
       june
     );
     expect(notFinal.isFinalMonth).toBe(false);
   });
 
+  it("reports a shortfall standing in the final month", () => {
+    // 20 required through June against 14 stamped, then a July worked at home:
+    // the year ends six days short and the balance stays negative.
+    const july = computeMonthStats(2027, 7, {}, 40);
+    const fy = computeFyStats(
+      "2027-07",
+      baseline({ officeDays: 14, weightedEligible: 1100 }),
+      july
+    );
+    expect(fy.isFinalMonth).toBe(true);
+    expect(fy.cumulativeRequired).toBe(20);
+    expect(fy.balance).toBe(-6);
+    expect(fy.remainingNeeded).toBe(6);
+  });
+
   it("flags a partial window when tracking began mid-year", () => {
     const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
     const partial = computeFyStats(
-      { ...octContext(PRIOR_AUG_SEP), windowStartMonth: "2026-09" },
+      "2026-10",
+      { windowStartMonth: "2026-09", prior: PRIOR_AUG_SEP },
       october
     );
     expect(partial.isPartialWindow).toBe(true);
     expect(partial.windowStartMonth).toBe("2026-09");
-    expect(computeFyStats(octContext(PRIOR_AUG_SEP), october).isPartialWindow).toBe(
-      false
-    );
+    expect(
+      computeFyStats("2026-10", baseline(PRIOR_AUG_SEP), october).isPartialWindow
+    ).toBe(false);
   });
 
   it("handles an all-mandated window without dividing by zero", () => {
@@ -1024,7 +1027,8 @@ describe("computeFyStats", () => {
     ];
     const october = computeMonthStats(2026, 10, {}, 40, mandates);
     const fy = computeFyStats(
-      octContext({ officeDays: 0, weightedEligible: 0 }),
+      "2026-10",
+      baseline({ officeDays: 0, weightedEligible: 0 }),
       october
     );
     expect(fy.cumulativeRequired).toBe(0);

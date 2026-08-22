@@ -15,7 +15,7 @@ import {
   shiftMonthKey,
   toMonthKey,
   type Entries,
-  type FyContext,
+  type FyBaseline,
 } from "@/lib/rto";
 import { Calendar } from "@/components/calendar";
 
@@ -56,9 +56,9 @@ export default async function Home({
   // The FY on screen follows the month on screen, never the clock — that is
   // what keeps this render timezone-independent, and it is what lets you review
   // a finished year.
-  const fy = financialYearOf(monthKey);
-  const { startMonth: fyStartMonth, endMonth: fyEndMonth } =
-    financialYearBounds(fy);
+  const { startMonth: fyStartMonth } = financialYearBounds(
+    financialYearOf(monthKey)
+  );
 
   // Month the record begins. An aggregate, so one row back and no entries.
   const [firstRow] = await db
@@ -144,14 +144,10 @@ export default async function Home({
   // Two numbers, not the earlier months' entries: only the displayed month is
   // editable from here, so everything before it is constant for the life of the
   // mount and the client can re-run the single ceil on its own.
-  const fyContext: FyContext | null =
+  const fyBaseline: FyBaseline | null =
     windowStart === null
       ? null
       : {
-          fy,
-          monthKey,
-          fyStartMonth,
-          fyEndMonth,
           windowStartMonth: windowStart,
           prior: aggregateMonths(
             monthsBetween(windowStart, shiftMonthKey(monthKey, -1)),
@@ -232,12 +228,11 @@ export default async function Home({
           entries and the new month renders blank. */}
       <Calendar
         key={monthKey}
-        year={year}
-        month={month}
+        monthKey={monthKey}
         initialEntries={entries}
         targetPercent={targetPercent}
         mandates={mandates}
-        fyContext={fyContext}
+        fyBaseline={fyBaseline}
       />
     </main>
   );
