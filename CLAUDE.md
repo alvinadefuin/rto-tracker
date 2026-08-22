@@ -14,7 +14,7 @@ make test                  # → npm test → vitest run --passWithNoTests
 make lint                  # → npm run lint → eslint
 npm run db:generate        # src/db/schema.ts → a new migration in drizzle/; commit it
 npm run db:migrate         # apply pending migrations to the DEV branch
-npm run db:check           # validate the migration journal
+npm run db:check           # validate the journal (recreates an empty drizzle/ if absent)
 npx auth secret            # generate AUTH_SECRET
 ```
 
@@ -49,22 +49,45 @@ Editing `src/db/schema.ts` means:
 
 Production migrates itself: `vercel.json` runs `next build && node scripts/migrate.mjs`,
 and `scripts/should-migrate.mjs` lets that through only on `VERCEL_ENV=production`. A
-failed migration fails the build, so a deploy never goes live against a schema that did
-not migrate. This replaces a two-push routine that took production down twice — with
+failed migration exits non-zero, so that build fails and is never promoted. Read that
+narrowly: it means a *failing* migration cannot ship. It does not mean the schema is always
+correct — the first rule below is a way to deploy green against a schema that never
+changed. This replaces a two-push routine that took production down twice — with
 `rto_targets` after `d93c037`, and with `wfh_mandates` after `431cff2`.
 
-Three rules the mechanism creates:
+Four rules the mechanism creates:
 
+- **Never edit `schema.ts` without generating.** This is the one remaining way to
+  reproduce the old outage, and it now takes forgetting *one* command instead of two.
+  `next build` type-checks against `schema.ts`, not against the database, so a schema edit
+  with no migration compiles, deploys green, reports matching migration counts, and then
+  500s on the first query touching the new column. The code ships; only the schema doesn't.
+  If you touched `schema.ts`, `drizzle/` belongs in the same commit.
 - **Regenerate after rebasing onto main.** A migration's position is its `when` timestamp
   in `drizzle/meta/_journal.json`, not its filename. The migrator reads only the newest
-  applied row and applies whatever is newer, so a migration older than that row is
-  skipped **silently, with no error**. After a rebase, delete yours and regenerate it.
+  applied row and applies whatever is newer, so a migration older than that row would
+  otherwise be skipped with no error. `migrate` now catches this — it compares the
+  journal's entry count against the rows recorded in the database and fails the build on a
+  shortfall — but the fix is still to delete yours and regenerate it after a rebase.
 - **Expand, then contract, across two deploys.** Migrations apply during the build while
   the previous deployment is still serving, and Vercel's rollback reverts code but never
   schema. Add and backfill in one deploy; drop only once the new code is live.
 - **Never `drizzle-kit push`.** It mutates a branch without journalling, so the next
   `migrate` tries to create what is already there and fails. If dev drifts, reset it from
   its parent in the Neon console and migrate forward.
+
+**A failed migration can leave the schema half-changed, and there is no automatic
+recovery.** `neon-http` runs each statement as its own round-trip with no enclosing
+transaction, and writes journal rows only after every migration has applied — so a failure
+part-way leaves earlier statements applied and unrecorded, and every later build then fails
+on already-existing objects. Repair it by hand: either reconcile the objects in the Neon
+console, or run the emergency path against production —
+`DATABASE_URL=<prod-url> node scripts/migrate.mjs`, pasting the URL for that one
+invocation and never storing it in `.env.local`. Keeping each migration small and additive
+is what limits how much there is to repair.
+
+`docs/decisions/0004-migrations-on-deploy.md` records the remaining operational hazards,
+including that a failed migration echoes its SQL into a durable build log.
 
 ## Architecture
 

@@ -52,6 +52,37 @@ describe("withoutSecrets", () => {
     expect(withoutSecrets(error, [undefined, ""])).not.toContain("[redacted]");
   });
 
+  it("follows the cause chain, because .stack omits it", () => {
+    // Drizzle wraps driver failures: the message is the failing SQL, and the actual
+    // Postgres error with its SQLSTATE hangs off .cause. Without this, the one log line
+    // that matters says what failed and not why.
+    const postgres = new Error('relation "user" already exists');
+    const wrapped = new Error('Failed query: CREATE TABLE "user" (...)', { cause: postgres });
+    const text = withoutSecrets(wrapped, []);
+    expect(text).toContain("Failed query");
+    expect(text).toContain('relation "user" already exists');
+  });
+
+  it("scrubs a secret that appears only in the cause", () => {
+    const inner = new Error("auth failed for hunter2");
+    const outer = new Error("Failed query: select 1", { cause: inner });
+    expect(withoutSecrets(outer, ["hunter2"])).not.toContain("hunter2");
+  });
+
+  it("does not hang on a circular cause chain", () => {
+    const a = new Error("a");
+    const b = new Error("b", { cause: a });
+    a.cause = b;
+    const text = withoutSecrets(a, []);
+    expect(text).toContain("a");
+    expect(text).toContain("b");
+  });
+
+  it("still renders an error with no cause exactly as before", () => {
+    const error = new Error("boom");
+    expect(withoutSecrets(error, [])).toBe(error.stack);
+  });
+
   it("handles a thrown value that is not an Error", () => {
     expect(withoutSecrets("plain hunter2 string", ["hunter2"])).toBe("plain [redacted] string");
     expect(withoutSecrets(42, [])).toBe("42");

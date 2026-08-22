@@ -95,11 +95,29 @@ try {
   }
 
   const total = journal.entries.length;
-  console.log(
-    recorded === null
-      ? `[migrate] up to date — ${total} migration(s) in ${MIGRATIONS_FOLDER}, recorded count unavailable`
-      : `[migrate] up to date — ${recorded} of ${total} migration(s) recorded`
-  );
+
+  if (recorded === null) {
+    console.log(
+      `[migrate] up to date — ${total} migration(s) in ${MIGRATIONS_FOLDER}, recorded count unavailable`
+    );
+  } else if (recorded < total) {
+    // The design's one silent hazard, caught. Both numbers are in scope right here, which
+    // makes this the place to catch it rather than a rule in a document — printing them
+    // under the words "up to date" would report the failure inside a sentence asserting
+    // everything is fine.
+    //
+    // `<` and not `!==`: deliberately squashing or removing migration files leaves more
+    // recorded than the journal holds, which is fine and must not fail a deploy.
+    console.error(
+      `[migrate] ${recorded} of ${total} migration(s) recorded — ${total - recorded} not applied. ` +
+        `The migrator only applies entries newer than the newest recorded one, so a migration ` +
+        `generated out of order is skipped without error. Regenerate it so its timestamp is ` +
+        `newest, then redeploy.`
+    );
+    process.exit(1);
+  } else {
+    console.log(`[migrate] up to date — ${recorded} of ${total} migration(s) recorded`);
+  }
 } catch (error) {
   // The driver's error is outside our control and may carry the connection string, the
   // encoded password, or the decoded one. secretsInUrl covers all three.

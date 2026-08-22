@@ -28,9 +28,10 @@ build, and a failed build is never promoted.
 `PROD_DATABASE_URL`, `DRIZZLE_TARGET`, `db:push`, and `db:push:prod` are deleted. On
 Vercel `DATABASE_URL` is already the production branch and locally it is already dev, so
 one variable is correct in both places and no laptop holds a production connection
-string. See the consequence below for what that does and does not buy. The emergency path is an inline `DATABASE_URL=<prod-url> node
-scripts/migrate.mjs`, which works because `dotenv` does not overwrite variables already
-set in the environment.
+string. See the consequence below for what that does and does not buy.
+
+The emergency path is an inline `DATABASE_URL=<prod-url> node scripts/migrate.mjs`, which
+works because `dotenv` does not overwrite variables already set in the environment.
 
 Both branches were at the current schema when this landed, so migration `0000` is never
 executed. One row was seeded per branch instead:
@@ -61,8 +62,14 @@ Rejected alternatives:
 
 ## Consequences
 
-- A schema edit without its generated migration ships nothing. The migration file is the
-  change.
+- **A schema edit without its generated migration still ships the code.** This is the one
+  remaining path to the original outage, and it is worth stating precisely because the
+  short version — "the migration file is the change" — understates it. `next build`
+  type-checks against `src/db/schema.ts`, not against the database, so the edit compiles;
+  `migrate` finds nothing pending and reports matching counts; the deploy goes green; and
+  the first query touching the new column 500s. It now takes forgetting one command rather
+  than two, and nothing in the pipeline can detect it, because from the outside a schema
+  edit with no migration is indistinguishable from no schema change at all.
 - Migrations apply during the build, while the previous deployment is still serving, and
   Vercel's rollback reverts code but never schema. Destructive changes therefore take two
   deploys: expand and backfill, then contract once the new code is live.

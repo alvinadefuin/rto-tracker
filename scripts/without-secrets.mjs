@@ -12,19 +12,44 @@
  * properties such as ERR_INVALID_URL's `input`, which is where the raw connection string
  * would otherwise sit.
  *
+ * The `cause` chain is followed, because `.stack` omits it and drizzle needs it. Drizzle
+ * wraps every driver failure in a DrizzleQueryError whose message is the failing SQL and
+ * whose `cause` holds the actual Postgres error and its SQLSTATE. Without the chain, the
+ * most consequential line this system ever logs says *what* failed and not *why* — while
+ * the reader is looking at a partially-applied schema.
+ *
  * Replacement is split/join, never a regex: a secret is an opaque string that can contain
  * `.`, `?`, `$`, `(`, `)` and friends, and a regex would treat those as metacharacters.
+ * It is applied to the whole assembled text, so a secret surfacing only in a cause is
+ * scrubbed too.
  *
  * @param {unknown} error
  * @param {(string | undefined)[]} secrets values to remove; empty and undefined ignored
  * @returns {string}
  */
 export function withoutSecrets(error, secrets) {
-  const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
-
   return secrets
     .filter((secret) => typeof secret === "string" && secret.length > 0)
-    .reduce((scrubbed, secret) => scrubbed.split(secret).join("[redacted]"), text);
+    .reduce((scrubbed, secret) => scrubbed.split(secret).join("[redacted]"), describe(error));
+}
+
+/** Depth cap: a `cause` chain can be circular, and no real one is this deep. */
+const MAX_CAUSE_DEPTH = 4;
+
+/**
+ * An error rendered as text, following `cause` because `.stack` does not.
+ *
+ * @param {unknown} value
+ * @param {number} depth
+ * @returns {string}
+ */
+function describe(value, depth = 0) {
+  if (!(value instanceof Error)) return String(value);
+
+  const rendered = value.stack ?? value.message;
+  if (value.cause === undefined || depth >= MAX_CAUSE_DEPTH) return rendered;
+
+  return `${rendered}\n  caused by: ${describe(value.cause, depth + 1)}`;
 }
 
 /**

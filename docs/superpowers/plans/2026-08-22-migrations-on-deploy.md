@@ -4,7 +4,7 @@
 
 **Goal:** Replace the two-command manual `drizzle-kit push` routine with committed, versioned migrations that the production Vercel build applies to the production Neon branch by itself.
 
-**Architecture:** `drizzle-kit generate` writes SQL migrations into `drizzle/`, committed with the schema change. `vercel.json` sets the build command to `next build && node scripts/migrate.mjs`. That script consults a pure, unit-tested `shouldMigrate(env)` guard that only permits a run when `VERCEL_ENV === "production"` or when no Vercel environment is present at all, then applies pending migrations with the programmatic `drizzle-orm/neon-http` migrator. Both Neon branches are already at the current schema, so migration `0000` is never executed — one row is seeded into `drizzle.__drizzle_migrations` per branch to declare them baselined. `PROD_DATABASE_URL`, `DRIZZLE_TARGET`, `db:push`, and `db:push:prod` are deleted, so no laptop holds a production schema-write credential.
+**Architecture:** `drizzle-kit generate` writes SQL migrations into `drizzle/`, committed with the schema change. `vercel.json` sets the build command to `next build && node scripts/migrate.mjs`. That script consults a pure, unit-tested `shouldMigrate(env)` guard that only permits a run when `VERCEL_ENV === "production"` or when no Vercel environment is present at all, then applies pending migrations with the programmatic `drizzle-orm/neon-http` migrator. Both Neon branches are already at the current schema, so migration `0000` is never executed — one row is seeded into `drizzle.__drizzle_migrations` per branch to declare them baselined. `PROD_DATABASE_URL`, `DRIZZLE_TARGET`, `db:push`, and `db:push:prod` are deleted, so no laptop holds a production connection string and no command can target production by reading a variable. (Both Neon branches share the `neondb_owner` password, so this prevents accidents rather than access — see ADR 0004.)
 
 **Tech Stack:** Next.js 16.3.0 (App Router), Drizzle ORM 0.45.2, drizzle-kit 0.31.10, Neon Postgres (`@neondatabase/serverless`), Vitest 4.1.10, Vercel.
 
@@ -50,8 +50,9 @@ grep '^DATABASE_URL=' .env.local | grep -c 'ep-flat-unit-azuxnnpa'   # expect: 1
 ```
 
 If that prints `0`, stop and ask — you may be pointed at production. The production
-endpoint is `ep-wild-sky-azqwwjy9`; it should only ever appear on the `PROD_DATABASE_URL`
-line, and only until Task 10 deletes it.
+The production endpoint has a different prefix; look it up in the Neon console rather than
+from this document, and it should only ever appear on the `PROD_DATABASE_URL` line, and
+only until Task 10 deletes it.
 
 **Confirm a green baseline:**
 
@@ -448,6 +449,37 @@ describe("withoutSecrets", () => {
     expect(withoutSecrets(error, [undefined, ""])).not.toContain("[redacted]");
   });
 
+  it("follows the cause chain, because .stack omits it", () => {
+    // Drizzle wraps driver failures: the message is the failing SQL, and the actual
+    // Postgres error with its SQLSTATE hangs off .cause. Without this, the one log line
+    // that matters says what failed and not why.
+    const postgres = new Error('relation "user" already exists');
+    const wrapped = new Error('Failed query: CREATE TABLE "user" (...)', { cause: postgres });
+    const text = withoutSecrets(wrapped, []);
+    expect(text).toContain("Failed query");
+    expect(text).toContain('relation "user" already exists');
+  });
+
+  it("scrubs a secret that appears only in the cause", () => {
+    const inner = new Error("auth failed for hunter2");
+    const outer = new Error("Failed query: select 1", { cause: inner });
+    expect(withoutSecrets(outer, ["hunter2"])).not.toContain("hunter2");
+  });
+
+  it("does not hang on a circular cause chain", () => {
+    const a = new Error("a");
+    const b = new Error("b", { cause: a });
+    a.cause = b;
+    const text = withoutSecrets(a, []);
+    expect(text).toContain("a");
+    expect(text).toContain("b");
+  });
+
+  it("still renders an error with no cause exactly as before", () => {
+    const error = new Error("boom");
+    expect(withoutSecrets(error, [])).toBe(error.stack);
+  });
+
   it("handles a thrown value that is not an Error", () => {
     expect(withoutSecrets("plain hunter2 string", ["hunter2"])).toBe("plain [redacted] string");
     expect(withoutSecrets(42, [])).toBe("42");
@@ -513,19 +545,44 @@ Create `scripts/without-secrets.mjs`:
  * properties such as ERR_INVALID_URL's `input`, which is where the raw connection string
  * would otherwise sit.
  *
+ * The `cause` chain is followed, because `.stack` omits it and drizzle needs it. Drizzle
+ * wraps every driver failure in a DrizzleQueryError whose message is the failing SQL and
+ * whose `cause` holds the actual Postgres error and its SQLSTATE. Without the chain, the
+ * most consequential line this system ever logs says *what* failed and not *why* — while
+ * the reader is looking at a partially-applied schema.
+ *
  * Replacement is split/join, never a regex: a secret is an opaque string that can contain
  * `.`, `?`, `$`, `(`, `)` and friends, and a regex would treat those as metacharacters.
+ * It is applied to the whole assembled text, so a secret surfacing only in a cause is
+ * scrubbed too.
  *
  * @param {unknown} error
  * @param {(string | undefined)[]} secrets values to remove; empty and undefined ignored
  * @returns {string}
  */
 export function withoutSecrets(error, secrets) {
-  const text = error instanceof Error ? (error.stack ?? error.message) : String(error);
-
   return secrets
     .filter((secret) => typeof secret === "string" && secret.length > 0)
-    .reduce((scrubbed, secret) => scrubbed.split(secret).join("[redacted]"), text);
+    .reduce((scrubbed, secret) => scrubbed.split(secret).join("[redacted]"), describe(error));
+}
+
+/** Depth cap: a `cause` chain can be circular, and no real one is this deep. */
+const MAX_CAUSE_DEPTH = 4;
+
+/**
+ * An error rendered as text, following `cause` because `.stack` does not.
+ *
+ * @param {unknown} value
+ * @param {number} depth
+ * @returns {string}
+ */
+function describe(value, depth = 0) {
+  if (!(value instanceof Error)) return String(value);
+
+  const rendered = value.stack ?? value.message;
+  if (value.cause === undefined || depth >= MAX_CAUSE_DEPTH) return rendered;
+
+  return `${rendered}\n  caused by: ${describe(value.cause, depth + 1)}`;
 }
 
 /**
@@ -565,7 +622,7 @@ export function secretsInUrl(url) {
 
 Run: `npx vitest run scripts/without-secrets.test.mjs`
 
-Expected: `Tests  13 passed (13)`.
+Expected: `Tests  17 passed (17)`.
 
 - [ ] **Step 5: Write the migrate script**
 
@@ -669,11 +726,29 @@ try {
   }
 
   const total = journal.entries.length;
-  console.log(
-    recorded === null
-      ? `[migrate] up to date — ${total} migration(s) in ${MIGRATIONS_FOLDER}, recorded count unavailable`
-      : `[migrate] up to date — ${recorded} of ${total} migration(s) recorded`
-  );
+
+  if (recorded === null) {
+    console.log(
+      `[migrate] up to date — ${total} migration(s) in ${MIGRATIONS_FOLDER}, recorded count unavailable`
+    );
+  } else if (recorded < total) {
+    // The design's one silent hazard, caught. Both numbers are in scope right here, which
+    // makes this the place to catch it rather than a rule in a document — printing them
+    // under the words "up to date" would report the failure inside a sentence asserting
+    // everything is fine.
+    //
+    // `<` and not `!==`: deliberately squashing or removing migration files leaves more
+    // recorded than the journal holds, which is fine and must not fail a deploy.
+    console.error(
+      `[migrate] ${recorded} of ${total} migration(s) recorded — ${total - recorded} not applied. ` +
+        `The migrator only applies entries newer than the newest recorded one, so a migration ` +
+        `generated out of order is skipped without error. Regenerate it so its timestamp is ` +
+        `newest, then redeploy.`
+    );
+    process.exit(1);
+  } else {
+    console.log(`[migrate] up to date — ${recorded} of ${total} migration(s) recorded`);
+  }
 } catch (error) {
   // The driver's error is outside our control and may carry the connection string, the
   // encoded password, or the decoded one. secretsInUrl covers all three.
@@ -924,6 +999,13 @@ insert the one row that tells the migrator it is already done.
 - Create: `scratch/baseline.mjs` (gitignored, never committed)
 - Create: `scratch/inspect.mjs` (gitignored, never committed)
 
+> **As executed (22 Aug 2026):** the seeding below was performed through the Neon console
+> API rather than a local `scratch/baseline.mjs`, which avoided materialising a production
+> connection string in shell history. Same three statements, same values. Note also that
+> `PROD_DATABASE_URL` no longer exists — Task 10 removed it — so the
+> `grep '^PROD_DATABASE_URL=' .env.local` one-liners below are a record of how this ran,
+> not commands that still work.
+
 - [ ] **Step 1: Write the seeder**
 
 Create `scratch/baseline.mjs`. `/scratch` is already in `.gitignore`, so this never
@@ -1066,8 +1148,8 @@ TARGET_DATABASE_URL="$(grep '^PROD_DATABASE_URL=' .env.local | cut -d= -f2- | tr
   node scratch/baseline.mjs
 ```
 
-Expected: `host: ep-wild-sky-azqwwjy9-...` — **check this host before reading further; if
-it says `ep-flat-unit`, you have just re-run dev and it should have refused.** Then the
+Expected: the production endpoint host — **check this host before reading further; if it says `ep-flat-unit`, you
+have just re-run dev and it should have refused.** Then the
 same tag, `when`, and hash as Task 5, and `seeded:` with one row.
 
 The tag, `when`, and hash **must be identical** to Task 5's, because they are computed
@@ -1090,7 +1172,7 @@ DATABASE_URL="$(grep '^PROD_DATABASE_URL=' .env.local | cut -d= -f2- | tr -d '"'
 ```
 
 Expected: `[migrate] Vercel production deploy`, `[migrate] target host:
-ep-wild-sky-azqwwjy9-...`, `[migrate] up to date — 1 of 1 migration(s) recorded`, exit
+the production endpoint host, `[migrate] up to date — 1 of 1 migration(s) recorded`, exit
 `0`. Same `1 of 1` reasoning as Task 5 — and it must be the production host on this run.
 
 This exercises the exact code path the Vercel build will take, against the real
@@ -1427,7 +1509,11 @@ Expected: `0` and `grep exit: 1`.
 
 - [ ] **Step 3: Confirm the production endpoint appears nowhere in the repo**
 
-Run: `grep -rn 'ep-wild-sky-azqwwjy9' . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.next`
+Run, substituting the real production endpoint prefix from the Neon console:
+
+```bash
+grep -rn '<prod-endpoint-prefix>' . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.next
+```
 
 Expected: no output.
 
@@ -1458,7 +1544,7 @@ Merge `feat/migrations-on-deploy` to `main` and push.
 Then, in the Vercel build log for that production deployment, confirm:
 
 - `[migrate] Vercel production deploy`
-- `[migrate] target host: ep-wild-sky-azqwwjy9-...`
+- `[migrate] target host:` followed by the production endpoint
 - `[migrate] up to date — 1 of 1 migration(s) recorded` — the counts matching is the
   signal; if they ever diverge, a migration was skipped silently
 
@@ -1484,6 +1570,8 @@ to force that proof earlier.
 - Both Neon branches hold exactly one `drizzle.__drizzle_migrations` row with identical
   `hash` and `created_at`.
 - `db:push` and `db:push:prod` no longer exist; `PROD_DATABASE_URL` and `DRIZZLE_TARGET`
-  appear nowhere in the repo or in `.env.local`.
+  appear in no live config, no live doc, and not in `.env.local`. They still appear in this
+  plan and in ADR 0004, which describe their removal — that is the point of those
+  documents, not a leftover.
 - A production build log shows the migrate step reaching the production host.
 - `CLAUDE.md` no longer tells anyone to push to two branches.
