@@ -137,6 +137,22 @@ export function mandatesOverlap(a: WfhMandate, b: WfhMandate): boolean {
 }
 
 /**
+ * True when `mandate` covers any day of `monthKey` (YYYY-MM). The `-31` upper
+ * bound is the same trick the page queries use: against a fixed-width key, a
+ * bound past the end of a short month is harmless, because no stored day can
+ * fall between the real month end and the 31st.
+ */
+export function mandateTouchesMonth(
+  mandate: WfhMandate,
+  monthKey: string
+): boolean {
+  return (
+    mandate.startDate <= `${monthKey}-31` &&
+    `${monthKey}-01` <= (mandate.endDate ?? OPEN_ENDED_DATE)
+  );
+}
+
+/**
  * Inclusive day-by-day walk from `start` to `end`. UTC component math only:
  * the Date is built from split integers, never parsed from the string.
  */

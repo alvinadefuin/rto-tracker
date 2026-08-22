@@ -21,6 +21,7 @@ import {
   financialYearBounds,
   shiftMonthKey,
   monthsBetween,
+  mandateTouchesMonth,
   type TargetPeriod,
   type WfhMandate,
 } from "./rto";
@@ -789,5 +790,45 @@ describe("monthsBetween", () => {
     expect(months).toHaveLength(12);
     expect(months[0]).toBe("2026-08");
     expect(months[11]).toBe("2027-07");
+  });
+});
+
+describe("mandateTouchesMonth", () => {
+  it("is true for a mandate contained in the month", () => {
+    const m: WfhMandate = { startDate: "2026-08-12", endDate: "2026-08-20" };
+    expect(mandateTouchesMonth(m, "2026-08")).toBe(true);
+  });
+
+  it("is true for a mandate spanning into the month from either side", () => {
+    const before: WfhMandate = { startDate: "2026-07-28", endDate: "2026-08-03" };
+    const after: WfhMandate = { startDate: "2026-08-28", endDate: "2026-09-04" };
+    expect(mandateTouchesMonth(before, "2026-08")).toBe(true);
+    expect(mandateTouchesMonth(after, "2026-08")).toBe(true);
+  });
+
+  it("is true on the first and last day of the month", () => {
+    const first: WfhMandate = { startDate: "2026-08-01", endDate: "2026-08-01" };
+    const last: WfhMandate = { startDate: "2026-08-31", endDate: "2026-08-31" };
+    expect(mandateTouchesMonth(first, "2026-08")).toBe(true);
+    expect(mandateTouchesMonth(last, "2026-08")).toBe(true);
+  });
+
+  it("is false for a mandate wholly before or after the month", () => {
+    const before: WfhMandate = { startDate: "2026-07-01", endDate: "2026-07-31" };
+    const after: WfhMandate = { startDate: "2026-09-01", endDate: "2026-09-30" };
+    expect(mandateTouchesMonth(before, "2026-08")).toBe(false);
+    expect(mandateTouchesMonth(after, "2026-08")).toBe(false);
+  });
+
+  it("treats a null endDate as reaching every later month", () => {
+    const open: WfhMandate = { startDate: "2026-08-12", endDate: null };
+    expect(mandateTouchesMonth(open, "2026-08")).toBe(true);
+    expect(mandateTouchesMonth(open, "2027-03")).toBe(true);
+    expect(mandateTouchesMonth(open, "2026-07")).toBe(false);
+  });
+
+  it("handles a short month, where the -31 upper bound is not a real day", () => {
+    const feb: WfhMandate = { startDate: "2026-02-27", endDate: "2026-02-28" };
+    expect(mandateTouchesMonth(feb, "2026-02")).toBe(true);
   });
 });
