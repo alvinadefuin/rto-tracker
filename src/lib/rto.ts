@@ -410,3 +410,55 @@ export function aggregateMonths(
   }
   return { officeDays, weightedEligible };
 }
+
+export interface FyContext {
+  fy: number;
+  monthKey: string; // the displayed month, YYYY-MM
+  fyStartMonth: string; // the FY's own first month
+  fyEndMonth: string;
+  /** fyStartMonth, or later when the record began mid-year. */
+  windowStartMonth: string;
+  /** Months from windowStartMonth up to, but not including, monthKey. */
+  prior: MonthsAggregate;
+}
+
+export interface FyStats {
+  fy: number;
+  fyStartMonth: string;
+  fyEndMonth: string;
+  windowStartMonth: string;
+  isPartialWindow: boolean; // windowStartMonth > fyStartMonth
+  isFinalMonth: boolean; // monthKey === fyEndMonth
+  cumulativeOffice: number;
+  cumulativeRequired: number;
+  balance: number; // office − required; negative means days are owed
+  remainingNeeded: number; // max(0, −balance)
+}
+
+/**
+ * Financial-year position through the displayed month, inclusive.
+ *
+ * The single Math.ceil here is the design: prior months contribute un-rounded
+ * percent-points, the displayed month adds its own, and the year rounds up once.
+ * Every field is derived from month keys and integers, so nothing consults the
+ * clock and the client can recompute this after each tap.
+ */
+export function computeFyStats(ctx: FyContext, month: MonthStats): FyStats {
+  const cumulativeOffice = ctx.prior.officeDays + month.officeDays;
+  const weighted =
+    ctx.prior.weightedEligible + month.eligibleDays * month.targetPercent;
+  const cumulativeRequired = Math.ceil(weighted / 100);
+  const balance = cumulativeOffice - cumulativeRequired;
+  return {
+    fy: ctx.fy,
+    fyStartMonth: ctx.fyStartMonth,
+    fyEndMonth: ctx.fyEndMonth,
+    windowStartMonth: ctx.windowStartMonth,
+    isPartialWindow: ctx.windowStartMonth > ctx.fyStartMonth,
+    isFinalMonth: ctx.monthKey === ctx.fyEndMonth,
+    cumulativeOffice,
+    cumulativeRequired,
+    balance,
+    remainingNeeded: Math.max(0, -balance),
+  };
+}

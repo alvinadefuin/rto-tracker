@@ -23,9 +23,12 @@ import {
   monthsBetween,
   mandateTouchesMonth,
   aggregateMonths,
+  computeFyStats,
   type Entries,
   type TargetPeriod,
   type WfhMandate,
+  type FyContext,
+  type MonthsAggregate,
 } from "./rto";
 
 // Jan 2026: 31 days, starts Thu, 22 weekdays. ceil(0.4*22)=9.
@@ -893,5 +896,137 @@ describe("aggregateMonths", () => {
       officeDays: 0,
       weightedEligible: 0,
     });
+  });
+});
+
+describe("computeFyStats", () => {
+  // Aug + Sep 2026 fully eligible at 40%: (21 + 22) * 40 = 1720 percent-points.
+  const PRIOR_AUG_SEP: MonthsAggregate = {
+    officeDays: 23,
+    weightedEligible: 1720,
+  };
+
+  // Six office days in Oct 2026, all weekdays.
+  const OCT_OFFICE: Entries = {
+    "2026-10-01": "office",
+    "2026-10-02": "office",
+    "2026-10-05": "office",
+    "2026-10-06": "office",
+    "2026-10-07": "office",
+    "2026-10-08": "office",
+  };
+
+  function octContext(prior: MonthsAggregate): FyContext {
+    return {
+      fy: 2027,
+      monthKey: "2026-10",
+      fyStartMonth: "2026-08",
+      fyEndMonth: "2027-07",
+      windowStartMonth: "2026-08",
+      prior,
+    };
+  }
+
+  it("rounds once on the FY total, not once per month", () => {
+    const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
+    const fy = computeFyStats(octContext(PRIOR_AUG_SEP), october);
+    // 1720 + 22*40 = 2600 percent-points -> exactly 26 days.
+    expect(fy.cumulativeRequired).toBe(26);
+    // Summing monthly ceils would owe 27: ceil(8.4)+ceil(8.8)+ceil(8.8).
+    const monthlySum =
+      Math.ceil((21 * 40) / 100) +
+      Math.ceil((22 * 40) / 100) +
+      Math.ceil((22 * 40) / 100);
+    expect(monthlySum).toBe(27);
+    expect(fy.cumulativeRequired).toBeLessThan(monthlySum);
+  });
+
+  it("adds the displayed month's office days to the prior window", () => {
+    const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
+    const fy = computeFyStats(octContext(PRIOR_AUG_SEP), october);
+    expect(fy.cumulativeOffice).toBe(29);
+    expect(fy.balance).toBe(3);
+    expect(fy.remainingNeeded).toBe(0);
+    expect(fy.fy).toBe(2027);
+  });
+
+  it("carries a shortfall forward as days still owed", () => {
+    const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
+    const fy = computeFyStats(
+      octContext({ officeDays: 5, weightedEligible: 1720 }),
+      october
+    );
+    expect(fy.cumulativeOffice).toBe(11);
+    expect(fy.cumulativeRequired).toBe(26);
+    expect(fy.balance).toBe(-15);
+    expect(fy.remainingNeeded).toBe(15);
+  });
+
+  it("lets a banked surplus cover a whole month worked from home", () => {
+    // 11 required against 20 stamped through June: 9 days banked.
+    const prior: MonthsAggregate = { officeDays: 20, weightedEligible: 1100 };
+    // Jul 2027 has 22 weekdays and nothing stamped.
+    const july = computeMonthStats(2027, 7, {}, 40);
+    const fy = computeFyStats(
+      {
+        fy: 2027,
+        monthKey: "2027-07",
+        fyStartMonth: "2026-08",
+        fyEndMonth: "2027-07",
+        windowStartMonth: "2026-08",
+        prior,
+      },
+      july
+    );
+    expect(july.requiredDays).toBe(9); // the month alone still asks for 9
+    expect(fy.cumulativeRequired).toBe(20); // 1100 + 880 = 1980 -> ceil 19.8
+    expect(fy.cumulativeOffice).toBe(20);
+    expect(fy.balance).toBe(0);
+    expect(fy.remainingNeeded).toBe(0); // a whole month at home, still level
+    expect(fy.isFinalMonth).toBe(true);
+  });
+
+  it("flags the final month only in July", () => {
+    const june = computeMonthStats(2027, 6, {}, 40);
+    const notFinal = computeFyStats(
+      {
+        fy: 2027,
+        monthKey: "2027-06",
+        fyStartMonth: "2026-08",
+        fyEndMonth: "2027-07",
+        windowStartMonth: "2026-08",
+        prior: { officeDays: 0, weightedEligible: 0 },
+      },
+      june
+    );
+    expect(notFinal.isFinalMonth).toBe(false);
+  });
+
+  it("flags a partial window when tracking began mid-year", () => {
+    const october = computeMonthStats(2026, 10, OCT_OFFICE, 40);
+    const partial = computeFyStats(
+      { ...octContext(PRIOR_AUG_SEP), windowStartMonth: "2026-09" },
+      october
+    );
+    expect(partial.isPartialWindow).toBe(true);
+    expect(partial.windowStartMonth).toBe("2026-09");
+    expect(computeFyStats(octContext(PRIOR_AUG_SEP), october).isPartialWindow).toBe(
+      false
+    );
+  });
+
+  it("handles an all-mandated window without dividing by zero", () => {
+    const mandates: WfhMandate[] = [
+      { startDate: "2026-10-01", endDate: "2026-10-31" },
+    ];
+    const october = computeMonthStats(2026, 10, {}, 40, mandates);
+    const fy = computeFyStats(
+      octContext({ officeDays: 0, weightedEligible: 0 }),
+      october
+    );
+    expect(fy.cumulativeRequired).toBe(0);
+    expect(fy.cumulativeOffice).toBe(0);
+    expect(fy.balance).toBe(0);
+    expect(fy.remainingNeeded).toBe(0);
   });
 });
