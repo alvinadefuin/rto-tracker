@@ -13,7 +13,11 @@ import {
   type TargetPeriod,
 } from "@/lib/rto";
 
-/** Validation failures return a message; auth failures throw. */
+/**
+ * Validation failures return a message; auth failures throw. Also normalises
+ * a posted `YYYY-MM-DD` day down to the `YYYY-MM` month key `rto_targets`
+ * stores.
+ */
 function parse(
   formData: FormData
 ): { ok: true; period: TargetPeriod } | { ok: false; error: string } {
@@ -25,6 +29,9 @@ function parse(
   if (startMonth === null) {
     return { ok: false, error: "Start month must be a valid date." };
   }
+  // endMonth is null for two different reasons: the field was blank (ongoing —
+  // valid) or its value failed to parse (invalid). rawEnd tells them apart, so
+  // dropping that clause would reject every ongoing period.
   if (rawEnd !== "" && endMonth === null) {
     return { ok: false, error: "End month must be a valid date, or blank." };
   }
