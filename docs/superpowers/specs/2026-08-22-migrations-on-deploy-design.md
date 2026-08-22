@@ -232,7 +232,13 @@ Reading the environment first makes that edge case inert in both directions.
 3. Requires `DATABASE_URL` and exits non-zero with a named error if absent, matching the
    existing message style in `drizzle.config.ts`.
 4. Logs the target host — **host only, never the full URL**, which carries the password
-   and would land in a Vercel build log.
+   and would land in a Vercel build log. The parse that yields the host is itself guarded:
+   `new URL` throws `ERR_INVALID_URL` with the whole connection string attached as an own
+   `input` property, and Node's uncaught-exception printer inspects own properties, so an
+   unguarded parse prints the password. Verified empirically, not assumed. A malformed
+   `DATABASE_URL` is a realistic operator error — a pasted `psql "…"` wrapper, a leftover
+   `:port` placeholder, a rotated password containing a character the WHATWG parser
+   rejects — and it is exactly the class of mistake this project keeps being bitten by.
 5. Runs `migrate(db, { migrationsFolder: "./drizzle" })` against a `neon-http` client.
 6. Logs completion and exits non-zero on any thrown error, failing the build. The error is
    passed through `withoutSecrets(error, [url, password])` first: point 4 keeps the URL out
@@ -240,6 +246,16 @@ Reading the environment first makes that edge case inert in both directions.
    control and may embed the connection string it was handed. Scrubbing is cheaper than
    trusting every future driver version. It is a pure function in `scripts/without-secrets.mjs`
    so it can be tested, the same reason `resolvePercent` sits outside `computeMonthStats`.
+
+   The same module exports `secretsInUrl(url)`, which yields the three forms a credential
+   can take in an error: the whole connection string, the password as the URL encodes it,
+   and the password decoded. The third is not redundant — `new URL(...).password` returns
+   the *encoded* form, drivers decode before use, so an error carrying `p@ss!word` would
+   survive a scrub that only knew `p%40ss%21word`. `secretsInUrl` never throws, so the
+   invalid-URL path above can use it to report safely.
+
+   Replacement is `split`/`join`, never a regex: a password is an opaque string that may
+   contain `.`, `?`, `$`, `(`, `)`, and a regex would treat those as metacharacters.
 
 Plain `.mjs` rather than TypeScript is deliberate: `tsconfig.json` includes `**/*.ts` and
 `**/*.mts`, so a TS script under `scripts/` would enter `next build`'s type-check, while
@@ -293,7 +309,7 @@ by an experiment, recover by resetting the dev branch from its parent — dev's
 
 | Situation | Result |
 |---|---|
-| Migration SQL fails on prod | Build fails, deploy not promoted, previous deployment and previous schema keep serving |
+| Migration SQL fails on prod | Build fails and the deploy is not promoted, so the previous *code* keeps serving — but the **schema may be partially changed**. `neon-http`'s migrator runs each statement as its own HTTP round-trip with no enclosing transaction, and writes journal rows only after every migration has applied, so a mid-run failure leaves earlier statements applied and unrecorded. Later builds then fail on already-existing objects until a human repairs it. Small additive migrations are what limit the blast radius |
 | `next build` fails | Migrate never runs; schema untouched |
 | `DATABASE_URL` missing in the production build | Build fails loudly with a named variable, instead of deploying and 500ing later |
 | Preview build | `outcome: "skip"` — logs the reason, exits 0, deploys green |
@@ -378,11 +394,20 @@ unit-tested. The guard is not domain logic, but it is the only thing preventing 
 preview build from writing to production, so it is tested where it lives rather than
 moved into `src/lib` to satisfy the convention.
 
-`scripts/without-secrets.test.mjs` covers the scrubber in 6 assertions: a whole
-connection string removed from an error, a bare password removed, every occurrence
-replaced rather than the first, the stack preserved so a real failure stays debuggable,
-`undefined`/empty secrets ignored rather than redacting everything, and a thrown value
-that is not an `Error` handled.
+`scripts/without-secrets.test.mjs` covers both exports in 13 assertions.
+
+`withoutSecrets`: a whole connection string removed from an error; a bare password
+removed; every occurrence replaced rather than the first; a secret full of regex
+metacharacters treated literally, which pins the `split`/`join` choice against a future
+regex rewrite — the one regression that would silently reintroduce a leak; the stack
+preserved so a real failure stays debuggable; the message used when there is no stack;
+`undefined` and empty secrets ignored rather than redacting between every character; and a
+thrown value that is not an `Error`.
+
+`secretsInUrl`: the URL and password both yielded; the decoded password yielded too; an
+unparseable URL returning just itself rather than throwing; a password containing a lone
+`%` not throwing; and a URL with no password yielding nothing that would redact unrelated
+text.
 
 `scripts/migrate.mjs` itself is not unit-tested. It is I/O against a real database, and
 a mocked migrator would assert only that the mock was called. Its two pure concerns — the

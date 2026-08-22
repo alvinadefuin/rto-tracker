@@ -366,12 +366,22 @@ git commit -m "feat: guard deciding when migrations may run"
 
 ## Task 2: The migrate script
 
-The file logs the target *host* and never the URL, because Vercel build logs are durable
-and the URL carries the password. An error thrown by the driver is outside this project's
-control and may embed the connection string it was handed, so the failure path scrubs
-known secrets rather than trusting the driver to have left them out. That scrubbing is a
-pure function in its own file, so it can be tested — the same reason `resolvePercent`
-lives outside `computeMonthStats`.
+Two invariants shape this file.
+
+**A connection string must never reach a log.** Vercel build logs are durable, and the URL
+carries the password. That means the host is logged and never the URL — and it also means
+every error path is scrubbed, because errors are not ours to control. `new URL` in
+particular throws `ERR_INVALID_URL` with the whole connection string attached as an own
+`input` property, and Node's uncaught-exception printer inspects own properties, so an
+unguarded parse prints the password. Verified, not assumed.
+
+**The exit code is the contract.** `"skip"` exits 0 so previews stay green; `"unknown"`
+exits non-zero so an impossible state fails the build rather than shipping code against an
+un-migrated schema.
+
+The two pure concerns — the guard and the secret handling — live in their own files so
+they can be tested, leaving this script as I/O only. Same reasoning that puts
+`resolvePercent` outside `computeMonthStats`.
 
 **Files:**
 - Create: `scripts/without-secrets.mjs`
@@ -379,13 +389,13 @@ lives outside `computeMonthStats`.
 - Create: `scripts/migrate.mjs`
 - Modify: `package.json`
 
-- [ ] **Step 1a: Write the failing test for the scrubber**
+- [ ] **Step 1: Write the failing test for the secret handling**
 
 Create `scripts/without-secrets.test.mjs`:
 
 ```js
 import { describe, expect, it } from "vitest";
-import { withoutSecrets } from "./without-secrets.mjs";
+import { secretsInUrl, withoutSecrets } from "./without-secrets.mjs";
 
 const URL_WITH_PASSWORD = "postgresql://user:hunter2@ep-example.aws.neon.tech/neondb";
 
@@ -405,16 +415,29 @@ describe("withoutSecrets", () => {
 
   it("replaces every occurrence, not just the first", () => {
     const error = new Error("hunter2 then hunter2 again");
-    expect(withoutSecrets(error, ["hunter2"])).toBe(
-      withoutSecrets(error, ["hunter2"]).replace(/hunter2/g, "[redacted]")
+    expect(withoutSecrets(error, ["hunter2"])).toContain("[redacted] then [redacted] again");
+  });
+
+  it("treats a secret with regex metacharacters literally", () => {
+    // Pins the split/join implementation. A naive new RegExp(secret) would let "." match
+    // any character and could corrupt or under-redact.
+    const secret = "a.b?c$d(e)f[g]h";
+    expect(withoutSecrets(new Error(`saw ${secret}`), [secret])).toBe(
+      withoutSecrets(new Error(`saw ${secret}`), [secret]).replace(secret, "[redacted]")
     );
-    expect(withoutSecrets(error, ["hunter2"])).not.toContain("hunter2");
+    expect(withoutSecrets(new Error("saw aXbYcZdEeFfGgHh"), [secret])).toContain("aXbYcZdEeFfGgHh");
   });
 
   it("keeps the stack when there is one, so a failure stays debuggable", () => {
     const error = new Error("boom");
     expect(withoutSecrets(error, [])).toContain("boom");
     expect(withoutSecrets(error, [])).toContain("without-secrets.test.mjs");
+  });
+
+  it("falls back to the message when there is no stack", () => {
+    const error = new Error("boom");
+    error.stack = undefined;
+    expect(withoutSecrets(error, [])).toBe("boom");
   });
 
   it("ignores undefined and empty secrets instead of redacting everything", () => {
@@ -428,15 +451,48 @@ describe("withoutSecrets", () => {
     expect(withoutSecrets(42, [])).toBe("42");
   });
 });
+
+describe("secretsInUrl", () => {
+  it("yields the whole URL and the password", () => {
+    const secrets = secretsInUrl(URL_WITH_PASSWORD);
+    expect(secrets).toContain(URL_WITH_PASSWORD);
+    expect(secrets).toContain("hunter2");
+  });
+
+  it("yields the decoded password too, since a driver decodes before use", () => {
+    // new URL(...).password is the *encoded* form, so scrubbing it alone would miss the
+    // decoded form that a driver error would actually carry.
+    const secrets = secretsInUrl("postgresql://user:p%40ss%21word@ep-example.aws.neon.tech/db");
+    expect(secrets).toContain("p%40ss%21word");
+    expect(secrets).toContain("p@ss!word");
+  });
+
+  it("returns the raw string for an unparseable URL rather than throwing", () => {
+    // The caller needs this to report the parse failure without leaking.
+    expect(secretsInUrl("not a url at all")).toEqual(["not a url at all"]);
+  });
+
+  it("does not throw on a password that cannot be percent-decoded", () => {
+    const secrets = secretsInUrl("postgresql://user:100%@ep-example.aws.neon.tech/db");
+    expect(secrets).toContain("100%");
+  });
+
+  it("yields nothing that would redact unrelated text when there is no password", () => {
+    const secrets = secretsInUrl("postgresql://ep-example.aws.neon.tech/db");
+    expect(withoutSecrets(new Error("an ordinary message"), secrets)).toContain(
+      "an ordinary message"
+    );
+  });
+});
 ```
 
-- [ ] **Step 1b: Run it and watch it fail**
+- [ ] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run scripts/without-secrets.test.mjs`
 
 Expected: FAIL — `Cannot find module './without-secrets.mjs'`.
 
-- [ ] **Step 1c: Write the scrubber**
+- [ ] **Step 3: Write the secret handling**
 
 Create `scripts/without-secrets.mjs`:
 
@@ -446,11 +502,17 @@ Create `scripts/without-secrets.mjs`:
  *
  * Everywhere else in the migrate script a connection string is deliberately kept out of
  * the log, because Vercel build logs are durable and the URL carries the password. An
- * error thrown by the database driver is outside this project's control and may embed the
- * URL or password it was handed, so the secrets are scrubbed rather than trusted absent.
+ * error thrown by the database driver — or by `new URL` — is outside this project's
+ * control and may embed the URL or password it was handed, so the secrets are scrubbed
+ * rather than trusted absent.
  *
- * The stack is preferred over the message so a genuine migration failure stays
- * debuggable; scrubbing applies to whichever is used.
+ * The stack is preferred over the message so a genuine failure stays debuggable, and
+ * scrubbing applies to whichever is used. Note that reading `.stack` also *drops* own
+ * properties such as ERR_INVALID_URL's `input`, which is where the raw connection string
+ * would otherwise sit.
+ *
+ * Replacement is split/join, never a regex: a secret is an opaque string that can contain
+ * `.`, `?`, `$`, `(`, `)` and friends, and a regex would treat those as metacharacters.
  *
  * @param {unknown} error
  * @param {(string | undefined)[]} secrets values to remove; empty and undefined ignored
@@ -463,22 +525,55 @@ export function withoutSecrets(error, secrets) {
     .filter((secret) => typeof secret === "string" && secret.length > 0)
     .reduce((scrubbed, secret) => scrubbed.split(secret).join("[redacted]"), text);
 }
+
+/**
+ * Every form of a credential that could appear in an error message, for one connection
+ * string: the whole string, the password as the URL encodes it, and the password decoded.
+ * Drivers decode before use, so the decoded form is the one an error is likeliest to
+ * carry, and `new URL(...).password` alone would miss it.
+ *
+ * Never throws. An unparseable string still yields itself, which is exactly what the
+ * caller needs in order to report a parse failure safely.
+ *
+ * @param {string} url
+ * @returns {(string | undefined)[]} for withoutSecrets, which ignores empty entries
+ */
+export function secretsInUrl(url) {
+  const secrets = [url];
+
+  let password;
+  try {
+    password = new URL(url).password;
+  } catch {
+    return secrets;
+  }
+  secrets.push(password);
+
+  try {
+    secrets.push(decodeURIComponent(password));
+  } catch {
+    // A lone "%" is not decodable. The encoded form above is still scrubbed.
+  }
+
+  return secrets;
+}
 ```
 
-- [ ] **Step 1d: Run it and watch it pass**
+- [ ] **Step 4: Run it and watch it pass**
 
 Run: `npx vitest run scripts/without-secrets.test.mjs`
 
-Expected: `Tests  6 passed (6)`.
+Expected: `Tests  13 passed (13)`.
 
-- [ ] **Step 1: Write the script**
+- [ ] **Step 5: Write the migrate script**
 
 Create `scripts/migrate.mjs`:
 
 ```js
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { isLocal, shouldMigrate } from "./should-migrate.mjs";
-import { withoutSecrets } from "./without-secrets.mjs";
+import { secretsInUrl, withoutSecrets } from "./without-secrets.mjs";
 
 // The guard reads the real process environment, deliberately before .env.local is
 // loaded. `vercel env pull` can write VERCEL_ENV into that file, and a value from a
@@ -515,8 +610,22 @@ if (!url) {
   process.exit(1);
 }
 
+// Gathered before anything parses the URL, because the parse itself can throw carrying
+// the connection string, and that error has to be scrubbable.
+const secrets = secretsInUrl(url);
+
+// `new URL` throws ERR_INVALID_URL with the whole connection string on an own `input`
+// property, and Node's uncaught-exception printer inspects own properties — so an
+// unguarded parse prints the password straight into a durable build log.
+let target;
+try {
+  target = new URL(url);
+} catch (error) {
+  console.error("[migrate] DATABASE_URL is not a valid URL:", withoutSecrets(error, secrets));
+  process.exit(1);
+}
+
 // Host only. The full URL carries the password and build logs are durable.
-const target = new URL(url);
 console.log(`[migrate] target host: ${target.host}`);
 
 const { neon } = await import("@neondatabase/serverless");
@@ -524,32 +633,44 @@ const { drizzle } = await import("drizzle-orm/neon-http");
 const { migrate } = await import("drizzle-orm/neon-http/migrator");
 
 try {
-  await migrate(drizzle(neon(url)), { migrationsFolder: "./drizzle" });
-  console.log("[migrate] schema up to date");
+  const journal = JSON.parse(await readFile("./drizzle/meta/_journal.json", "utf8"));
+  const sql = neon(url);
+
+  await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
+
+  // The migrator applies only journal entries newer than the newest recorded one, so a
+  // migration generated out of order is skipped in silence. Reporting both counts puts
+  // that in the one artifact anyone reads after a deploy — "up to date" on its own cannot
+  // distinguish "applied everything" from "skipped everything".
+  const [{ recorded }] = await sql`
+    select count(*)::int as recorded from "drizzle"."__drizzle_migrations"`;
+
+  console.log(
+    `[migrate] up to date — ${recorded} of ${journal.entries.length} migration(s) recorded`
+  );
 } catch (error) {
-  // The driver's error is outside our control and may carry the connection string it was
-  // given. Scrub the URL and its password rather than trusting the driver to have kept
-  // them out of the message.
-  console.error("[migrate] failed:", withoutSecrets(error, [url, target.password]));
+  // The driver's error is outside our control and may carry the connection string, the
+  // encoded password, or the decoded one. secretsInUrl covers all three.
+  console.error("[migrate] failed:", withoutSecrets(error, secrets));
   process.exit(1);
 }
 ```
 
-- [ ] **Step 2: Add the npm script**
+- [ ] **Step 6: Add the npm script**
 
-In `package.json`, add to `"scripts"` (leave `db:push` and `db:push:prod` alone for now —
-Task 3 removes them):
+In `package.json`, add to `"scripts"` — and leave `db:push` and `db:push:prod` alone,
+Task 3 removes them:
 
 ```json
 "db:migrate": "node scripts/migrate.mjs",
 ```
 
-- [ ] **Step 3: Verify the guard rejects a preview build**
+- [ ] **Step 7: Verify the guard rejects a preview build**
 
 Run: `VERCEL=1 VERCEL_ENV=preview npm run db:migrate`
 
-Expected: prints `[migrate] skipped — VERCEL_ENV=preview` and exits `0`.
-It must **not** print a target host — that would mean it got past the guard.
+Expected: prints `[migrate] skipped — VERCEL_ENV=preview` and exits `0`. It must **not**
+print a target host — that would mean it got past the guard.
 
 Confirm the exit code explicitly:
 
@@ -559,9 +680,7 @@ VERCEL=1 VERCEL_ENV=preview npm run db:migrate > /dev/null 2>&1; echo "exit: $?"
 
 Expected: `exit: 0`. A skip is a success; preview builds have to go green.
 
-- [ ] **Step 4: Verify it fails loudly with no DATABASE_URL**
-
-Run:
+- [ ] **Step 8: Verify it fails loudly with no DATABASE_URL**
 
 ```bash
 VERCEL=1 VERCEL_ENV=production node scripts/migrate.mjs; echo "exit: $?"
@@ -572,20 +691,17 @@ suppresses the dotenv load, so `.env.local` cannot rescue it — this is exactly
 of a Vercel production build with the variable unscoped, and it must fail rather than
 deploy.
 
-Do not run the script without `VERCEL_ENV` yet. `drizzle/` does not exist, so it would
-fail on a missing journal. Task 5 is the first real run.
+**Do not run the script without `VERCEL_ENV` set.** `drizzle/` does not exist yet, and a
+bare local run would connect to the live dev database. Task 5 is the first real run.
 
-- [ ] **Step 5: Verify an unrecognized Vercel environment fails the build**
-
-Run:
+- [ ] **Step 9: Verify an unrecognized Vercel environment fails the build**
 
 ```bash
 VERCEL=1 node scripts/migrate.mjs; echo "exit: $?"
 ```
 
-Expected: `[migrate] refusing — on Vercel with an unrecognized VERCEL_ENV=(unset)` and
-`exit: 1`. This is the case that must never be a quiet green — a production build that
-skipped silently would deploy code against an un-migrated schema.
+Expected: `[migrate] refusing — on Vercel with an unrecognized VERCEL_ENV=(unset)` on
+**stderr**, and `exit: 1`.
 
 Confirm a recognized skip still succeeds, so previews are unaffected:
 
@@ -595,7 +711,26 @@ VERCEL=1 VERCEL_ENV=development node scripts/migrate.mjs; echo "exit: $?"
 
 Expected: `[migrate] skipped — VERCEL_ENV=development` and `exit: 0`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 10: Verify a malformed DATABASE_URL fails without leaking it**
+
+This is the case the scrubbing exists for, so prove it rather than assume it:
+
+```bash
+DATABASE_URL='postgresql://owner:npg_FAKESECRET@ep-x.aws.neon.tech:port/neondb'   VERCEL=1 VERCEL_ENV=production node scripts/migrate.mjs 2>&1 | grep -c npg_FAKESECRET
+```
+
+Expected: `0`. The `:port` is deliberately invalid, so `new URL` throws. The output must
+say `DATABASE_URL is not a valid URL` and must not contain `npg_FAKESECRET` anywhere.
+
+Confirm the exit code too:
+
+```bash
+DATABASE_URL='postgresql://owner:npg_FAKESECRET@ep-x.aws.neon.tech:port/neondb'   VERCEL=1 VERCEL_ENV=production node scripts/migrate.mjs > /dev/null 2>&1; echo "exit: $?"
+```
+
+Expected: `exit: 1`.
+
+- [ ] **Step 11: Commit**
 
 ```bash
 git add scripts/migrate.mjs scripts/without-secrets.mjs scripts/without-secrets.test.mjs package.json
@@ -1192,6 +1327,12 @@ Rejected alternatives:
 - Local schema iteration is slower by one command, since every change now needs a
   generated file. That is the intended trade — the file is what makes the change
   reviewable and replayable.
+- **A failed migration can leave the schema partially changed.** The `neon-http` migrator
+  runs each statement as its own HTTP round-trip with no enclosing transaction, and inserts
+  journal rows only after every migration has applied. A failure part-way through therefore
+  leaves earlier statements applied and unjournalled, and every later build fails on
+  already-existing objects until a human repairs it. Keeping each migration small and
+  additive is what limits the blast radius; there is no automatic recovery.
 - **The guard cannot distinguish a real production deploy from `vercel build --prod` run
   on a laptop.** That command sets `VERCEL_ENV=production` and pulls the production
   `DATABASE_URL` into the build environment, so the "no laptop holds a production
@@ -1252,7 +1393,7 @@ Expected: dev host, `[migrate] schema up to date`, exit `0`.
 npm test && npm run lint && npx next build
 ```
 
-Expected: `Tests  113 passed (113)`, eslint clean, build succeeds.
+Expected: `Tests  120 passed (120)`, eslint clean, build succeeds.
 
 - [ ] **Step 6: Confirm the tree is clean and scratch is untracked**
 
