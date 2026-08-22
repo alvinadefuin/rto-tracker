@@ -12,8 +12,9 @@ npm run dev                # next dev on :3000
 npm run build              # next build
 make test                  # → npm test → vitest run --passWithNoTests
 make lint                  # → npm run lint → eslint
-npm run db:push            # sync src/db/schema.ts to the DEV Neon branch
-npm run db:push:prod       # ...and to the PRODUCTION branch — both, every time
+npm run db:generate        # src/db/schema.ts → a new migration in drizzle/; commit it
+npm run db:migrate         # apply pending migrations to the DEV branch
+npm run db:check           # validate the migration journal
 npx auth secret            # generate AUTH_SECRET
 ```
 
@@ -24,19 +25,42 @@ npx vitest run src/lib/rto.test.ts
 npx vitest run -t "returns 22 weekdays for Jan 2026"
 ```
 
-Env lives in `.env.local` (copy from `.env.example`): `DATABASE_URL`, `PROD_DATABASE_URL`,
-`AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`. `drizzle.config.ts` loads
-`.env.local` explicitly via dotenv; Next loads it on its own.
+Env lives in `.env.local` (copy from `.env.example`): `DATABASE_URL`, `AUTH_SECRET`,
+`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`. `drizzle.config.ts` loads `.env.local` explicitly
+via dotenv; Next loads it on its own.
 
-**There is one Neon project with two branches, and a schema change must be pushed to both.**
-`DATABASE_URL` points at the dev branch (`br-small-salad-az4cwdel`); Vercel's own
-`DATABASE_URL` points at the default `production` branch (`br-flat-night-azuif9ye`).
-`PROD_DATABASE_URL` is the second one, used *only* by `npm run db:push:prod` — the app never
-reads it. There is no migrations directory, so nothing reconciles the two branches for you
-and nothing fails at build time: a table pushed to dev but not prod compiles, deploys, and
-then 500s the first authenticated request that touches it. This is exactly how `rto_targets`
-took production down after `d93c037`. **Editing `src/db/schema.ts` means running both
-`npm run db:push` and `npm run db:push:prod` before the work is done.**
+**Schema changes travel as committed migrations, and production applies them on deploy.**
+One Neon project, two branches. Locally `DATABASE_URL` is the dev branch
+(`br-small-salad-az4cwdel`); on Vercel that same variable name is the default
+`production` branch (`br-flat-night-azuif9ye`). Nothing on your laptop holds a production
+schema-write credential, and nothing needs to.
+
+Editing `src/db/schema.ts` means:
+
+1. `npm run db:generate` — writes `drizzle/NNNN_<name>.sql`. **Read it.** `generate`
+   cannot tell a rename from a drop-plus-add and will emit destructive SQL for one.
+2. `npm run db:migrate` — applies it to the dev branch.
+3. Commit `drizzle/` alongside the schema change. The migration file *is* the change; a
+   schema edit without its migration ships nothing.
+
+Production migrates itself: `vercel.json` runs `next build && node scripts/migrate.mjs`,
+and `scripts/should-migrate.mjs` lets that through only on `VERCEL_ENV=production`. A
+failed migration fails the build, so a deploy never goes live against a schema that did
+not migrate. This replaces a two-push routine that took production down twice — with
+`rto_targets` after `d93c037`, and with `wfh_mandates` after `431cff2`.
+
+Three rules the mechanism creates:
+
+- **Regenerate after rebasing onto main.** A migration's position is its `when` timestamp
+  in `drizzle/meta/_journal.json`, not its filename. The migrator reads only the newest
+  applied row and applies whatever is newer, so a migration older than that row is
+  skipped **silently, with no error**. After a rebase, delete yours and regenerate it.
+- **Expand, then contract, across two deploys.** Migrations apply during the build while
+  the previous deployment is still serving, and Vercel's rollback reverts code but never
+  schema. Add and backfill in one deploy; drop only once the new code is live.
+- **Never `drizzle-kit push`.** It mutates a branch without journalling, so the next
+  `migrate` tries to create what is already there and fails. If dev drifts, reset it from
+  its parent in the Neon console and migrate forward.
 
 ## Architecture
 

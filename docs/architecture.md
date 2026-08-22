@@ -47,3 +47,11 @@ component: tapping a weekday cycles WFH → Office → Leave → Holiday → WFH
 updates optimistically, and persists via the `setDayStatus` server action
 (upsert, or delete when cycling back to WFH). On failure the cell reverts and a
 toast is shown.
+
+## Schema delivery
+
+`src/db/schema.ts` is the source of truth; `drizzle/` holds the generated migrations that
+carry it to a database. `drizzle-kit generate` writes them, they are committed with the
+schema change, and the production Vercel build applies whatever is pending via
+`scripts/migrate.mjs` before the deployment is promoted. The dev Neon branch is migrated
+locally with `npm run db:migrate`. See `docs/decisions/0004-migrations-on-deploy.md`.
