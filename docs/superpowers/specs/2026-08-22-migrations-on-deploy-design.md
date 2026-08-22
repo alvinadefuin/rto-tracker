@@ -40,6 +40,7 @@ So the fix cannot be a better reminder. The deploy has to carry the schema chang
 | `db:push` / `db:push:prod` | Deleted | Keeping them keeps the outage reachable. Mixing `push` with a migration journal also drifts the dev branch away from what migrations reproduce |
 | Baseline | One row seeded into the migrations table on both branches | Both DBs are already at the current schema. Declaring them at 0000 is honest and applies nothing |
 | Guard logic | Pure `shouldMigrate(env)`, unit-tested | It is the single thing standing between a preview build and the production database. That deserves a test |
+| Guard return shape | `{ run, outcome, reason }` | A wrong "no" on a production build is as dangerous as a wrong "yes". `outcome` lets the caller distinguish a legitimate preview skip from an impossible state and fail the build on the latter |
 
 ## How the migrator actually decides — verified, not assumed
 
@@ -157,25 +158,51 @@ Alternatives rejected:
 a pure function.
 
 ```js
+const VERCEL_ENVIRONMENTS = new Set(["production", "preview", "development"]);
+
+/** True when no Vercel environment is present at all — a laptop. */
+export function isLocal(env) {
+  return env.VERCEL === undefined && env.VERCEL_ENV === undefined;
+}
+
 /**
  * @param {{ VERCEL?: string, VERCEL_ENV?: string }} env
- * @returns {{ run: boolean, reason: string }}
+ * @returns {{ run: boolean, outcome: "local"|"production"|"skip"|"unknown", reason: string }}
  */
 export function shouldMigrate(env) {
-  const onVercel = env.VERCEL !== undefined || env.VERCEL_ENV !== undefined;
-
-  if (!onVercel) {
-    return { run: true, reason: "local run — applying to DATABASE_URL from .env.local" };
+  if (isLocal(env)) {
+    return { run: true, outcome: "local", reason: "local run" };
   }
   if (env.VERCEL_ENV === "production") {
-    return { run: true, reason: "Vercel production deploy" };
+    return { run: true, outcome: "production", reason: "Vercel production deploy" };
+  }
+  if (VERCEL_ENVIRONMENTS.has(env.VERCEL_ENV)) {
+    return { run: false, outcome: "skip", reason: `skipped — VERCEL_ENV=${env.VERCEL_ENV}` };
   }
   return {
     run: false,
-    reason: `skipped — on Vercel with VERCEL_ENV=${env.VERCEL_ENV ?? "(unset)"}`,
+    outcome: "unknown",
+    reason: `refusing — on Vercel with an unrecognized VERCEL_ENV=${env.VERCEL_ENV ?? "(unset)"}`,
   };
 }
 ```
+
+**A wrong "no" is as dangerous as a wrong "yes", and `outcome` is what makes it loud.**
+An earlier draft of this design returned only `{ run, reason }` and treated every
+non-production case as a silent, successful skip. That is a hole: on Vercel with
+`VERCEL_ENV` absent or unrecognized, the build would exit 0 and ship code against an
+un-migrated schema — the precise failure this project exists to remove. A legitimate
+preview always carries `VERCEL_ENV=preview`, so refusing an *unrecognized* value costs
+previews nothing and converts a silent green into a loud red. `migrate.mjs` therefore
+exits non-zero on `outcome === "unknown"` and exits 0 only on `"skip"`.
+
+`isLocal` is exported because `migrate.mjs` needs the same predicate to gate its `dotenv`
+import. One definition, two call sites, no drift.
+
+The laptop `reason` is deliberately just `"local run"` — it must not claim the URL came
+from `.env.local`, because the documented emergency path passes a production URL inline.
+The target host is logged separately, and that line is the one that names where writes
+are going.
 
 Default-deny, and specifically default-deny *on Vercel*. Testing `VERCEL_ENV` alone would
 be unsafe: if a Vercel build ever lacked that variable, an absent value would read as
@@ -183,6 +210,10 @@ be unsafe: if a Vercel build ever lacked that variable, an absent value would re
 environment. `VERCEL` is always set on Vercel, so requiring an explicit
 `VERCEL_ENV === "production"` once either variable is present closes that hole. A preview
 build cannot reach production no matter how `DATABASE_URL` is scoped.
+
+Comparison is strict equality against a string literal throughout. No trimming, no case
+folding, no substring test — each of those would open a hole, and `" production"`,
+`"production\n"`, and `"Production"` are all refused as unrecognized.
 
 The guard is applied to the **real process environment, before `.env.local` is loaded**.
 `vercel env pull` is reported to write `VERCEL_ENV` into that file, and a value from a
@@ -260,7 +291,8 @@ by an experiment, recover by resetting the dev branch from its parent — dev's
 | Migration SQL fails on prod | Build fails, deploy not promoted, previous deployment and previous schema keep serving |
 | `next build` fails | Migrate never runs; schema untouched |
 | `DATABASE_URL` missing in the production build | Build fails loudly with a named variable, instead of deploying and 500ing later |
-| Preview build | Skips, logs the reason, exits 0, deploys green |
+| Preview build | `outcome: "skip"` — logs the reason, exits 0, deploys green |
+| On Vercel with `VERCEL_ENV` absent, empty, or unrecognized | `outcome: "unknown"` — exits non-zero and **fails the build**. Should be unreachable, since Vercel always sets one of three values; if it ever happens, a silent green here would ship code against an un-migrated schema |
 | Two production builds race | Both read the same newest row and both apply the same migration; the loser errors on an already-existing object and its build fails. One deploy succeeds, no corruption. Accepted for a single-user app rather than adding an advisory lock |
 | Migration generated out of order | **Silently skipped.** No error. Mitigated only by the regenerate-after-rebase rule, which is why that rule is documented rather than assumed |
 | Deploy rolled back after a contract migration | Schema stays migrated, old code meets a changed schema. Prevented by the expand/contract rule, not by the mechanism |

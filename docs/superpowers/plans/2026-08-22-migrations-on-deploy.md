@@ -21,8 +21,15 @@ treats an absent `VERCEL_ENV` as "local, so run". That is unsafe if a Vercel bui
 lacks `VERCEL_ENV`, because it would fall through to running against whatever
 `DATABASE_URL` is scoped to that environment. Task 1 therefore also checks `VERCEL`,
 which Vercel always sets, and fails closed on Vercel when `VERCEL_ENV` is missing. Same
-decision, same default-deny intent, one more guard rail. The spec has been updated to
-match.
+decision, same default-deny intent, one more guard rail.
+
+A second change came out of Task 1's code review: the guard returns a third field,
+`outcome`, and `migrate.mjs` **fails the build** when it is `"unknown"`. The spec's
+original "a skip is always a success" rule reasoned about a wrong "yes" and not at all
+about a wrong "no" — a production build that skipped quietly would ship code against an
+un-migrated schema, which is the outage this replaces. Legitimate previews report
+`"skip"` and still exit 0, so nothing normal changed. The spec has been updated to match
+both changes.
 
 **Three facts that govern this work:**
 
@@ -101,6 +108,13 @@ a stray `show_db_tree()` function that drizzle does not manage. Leave it alone.
 This is the only thing standing between a preview build and the production database, so
 it is written test-first and lives in its own file with no imports.
 
+It returns three fields, not two. `run` says whether to migrate; `outcome` says how the
+caller should exit. That distinction exists because **a wrong "no" is as dangerous as a
+wrong "yes"** — if a production build skipped quietly, it would ship code against an
+un-migrated schema, which is the exact outage this project replaces. A legitimate preview
+always carries `VERCEL_ENV=preview`, so refusing an *unrecognized* value costs previews
+nothing.
+
 **Files:**
 - Create: `scripts/should-migrate.mjs`
 - Test: `scripts/should-migrate.test.mjs`
@@ -111,9 +125,27 @@ Create `scripts/should-migrate.test.mjs`:
 
 ```js
 import { describe, expect, it } from "vitest";
-import { shouldMigrate } from "./should-migrate.mjs";
+import { isLocal, shouldMigrate } from "./should-migrate.mjs";
 
-describe("shouldMigrate", () => {
+describe("isLocal", () => {
+  it("is true when no Vercel variables are present", () => {
+    expect(isLocal({})).toBe(true);
+  });
+
+  it("is false when VERCEL alone is present", () => {
+    expect(isLocal({ VERCEL: "1" })).toBe(false);
+  });
+
+  it("is false when VERCEL_ENV alone is present", () => {
+    expect(isLocal({ VERCEL_ENV: "preview" })).toBe(false);
+  });
+
+  it("is false for an empty VERCEL_ENV, which is present but blank", () => {
+    expect(isLocal({ VERCEL_ENV: "" })).toBe(false);
+  });
+});
+
+describe("shouldMigrate — whether it runs", () => {
   it("runs on a laptop, where no Vercel variables exist", () => {
     expect(shouldMigrate({}).run).toBe(true);
   });
@@ -145,13 +177,75 @@ describe("shouldMigrate", () => {
   it("is case-sensitive, so 'Production' does not pass", () => {
     expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "Production" }).run).toBe(false);
   });
+});
 
-  it("names the offending value in the reason, so a build log explains itself", () => {
+describe("shouldMigrate — outcome, which decides whether the build fails", () => {
+  it("reports 'local' on a laptop", () => {
+    expect(shouldMigrate({}).outcome).toBe("local");
+  });
+
+  it("reports 'production' on a production deploy", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "production" }).outcome).toBe("production");
+  });
+
+  it("reports 'skip' for a preview, which must stay green", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "preview" }).outcome).toBe("skip");
+  });
+
+  it("reports 'skip' for a development build, which must stay green", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "development" }).outcome).toBe("skip");
+  });
+
+  it("reports 'unknown' on Vercel with VERCEL_ENV absent, so the build fails loudly", () => {
+    expect(shouldMigrate({ VERCEL: "1" }).outcome).toBe("unknown");
+  });
+
+  it("reports 'unknown' for an empty VERCEL_ENV", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "" }).outcome).toBe("unknown");
+  });
+
+  it("reports 'unknown' for a wrong-case value rather than silently skipping", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "Production" }).outcome).toBe("unknown");
+  });
+
+  it("reports 'unknown' for an environment name Vercel does not define", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "staging" }).outcome).toBe("unknown");
+  });
+});
+
+describe("shouldMigrate — strictness of the production comparison", () => {
+  it("refuses a leading-space value rather than trimming it", () => {
+    const decision = shouldMigrate({ VERCEL: "1", VERCEL_ENV: " production" });
+    expect(decision.run).toBe(false);
+    expect(decision.outcome).toBe("unknown");
+  });
+
+  it("refuses a trailing-newline value rather than trimming it", () => {
+    const decision = shouldMigrate({ VERCEL: "1", VERCEL_ENV: "production\n" });
+    expect(decision.run).toBe(false);
+    expect(decision.outcome).toBe("unknown");
+  });
+});
+
+describe("shouldMigrate — the reason string, which is what a build log shows", () => {
+  it("names the offending value on a skip", () => {
     expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "preview" }).reason).toContain("preview");
   });
 
-  it("reports a readable reason when VERCEL_ENV is unset on Vercel", () => {
+  it("says 'unset' when VERCEL_ENV is missing on Vercel", () => {
     expect(shouldMigrate({ VERCEL: "1" }).reason).toContain("unset");
+  });
+
+  it("gives a non-empty reason on the local allow path", () => {
+    expect(shouldMigrate({}).reason).toMatch(/\S/);
+  });
+
+  it("gives a non-empty reason on the production allow path", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "production" }).reason).toMatch(/\S/);
+  });
+
+  it("does not claim the local URL came from .env.local, since the emergency path passes one inline", () => {
+    expect(shouldMigrate({}).reason).not.toContain(".env.local");
   });
 });
 ```
@@ -160,7 +254,7 @@ describe("shouldMigrate", () => {
 
 Run: `npx vitest run scripts/should-migrate.test.mjs`
 
-Expected: FAIL — `Failed to load ./should-migrate.mjs` or `shouldMigrate is not a function`.
+Expected: FAIL — `Cannot find module './should-migrate.mjs'`.
 
 If instead vitest reports `No test files found`, its default `include` does not match
 `.mjs` here. Fix it by adding `include: ["**/*.{test,spec}.?(c|m)[jt]s?(x)"]` to the
@@ -173,30 +267,65 @@ Create `scripts/should-migrate.mjs`:
 
 ```js
 /**
- * Decide whether this process may apply migrations.
+ * The three values Vercel sets for VERCEL_ENV. Anything else, while on Vercel, is a state
+ * this project does not understand — and guessing at it is how a deploy ends up shipping
+ * code against an un-migrated schema.
+ */
+const VERCEL_ENVIRONMENTS = new Set(["production", "preview", "development"]);
+
+/**
+ * True when no Vercel environment is present at all — i.e. a laptop.
+ *
+ * Exported because scripts/migrate.mjs needs the same predicate to decide whether to load
+ * .env.local. One definition, two call sites, no drift.
+ *
+ * Reads `env.VERCEL` rather than testing own-property-ness deliberately: an inherited
+ * value still counts as "on Vercel", which errs toward refusing to migrate.
+ *
+ * @param {{ VERCEL?: string, VERCEL_ENV?: string }} env
+ * @returns {boolean}
+ */
+export function isLocal(env) {
+  return env.VERCEL === undefined && env.VERCEL_ENV === undefined;
+}
+
+/**
+ * Decide whether this process may apply migrations, and how the caller should exit.
  *
  * Default-deny. The only permitted runs are a Vercel *production* deploy and a machine
- * with no Vercel environment at all (a laptop, targeting the dev branch). Every other
- * shape — preview, development, or Vercel with VERCEL_ENV somehow absent — is refused,
- * because the cost of a wrong "yes" is writing to the production database.
+ * with no Vercel environment at all (a laptop, targeting the dev branch).
+ *
+ * `outcome` exists because a wrong "no" is as dangerous as a wrong "yes":
+ *   - "skip"    a legitimate preview or development build. Exit 0; the deploy is fine.
+ *   - "unknown" on Vercel, but VERCEL_ENV is absent, blank, or not one Vercel defines.
+ *               Should be unreachable. The caller must FAIL THE BUILD, because skipping
+ *               quietly here ships code against an un-migrated schema.
+ *
+ * Comparison is strict equality against a literal — no trimming, no case folding, no
+ * substring test. Each of those would open a hole; " production" and "Production" are
+ * both refused.
  *
  * Pure: reads the object it is given, touches nothing else.
  *
  * @param {{ VERCEL?: string, VERCEL_ENV?: string }} env
- * @returns {{ run: boolean, reason: string }}
+ * @returns {{ run: boolean, outcome: "local"|"production"|"skip"|"unknown", reason: string }}
  */
 export function shouldMigrate(env) {
-  const onVercel = env.VERCEL !== undefined || env.VERCEL_ENV !== undefined;
-
-  if (!onVercel) {
-    return { run: true, reason: "local run — applying to DATABASE_URL from .env.local" };
+  if (isLocal(env)) {
+    // Deliberately does not name .env.local: the emergency path passes a production
+    // DATABASE_URL inline, and the caller logs the real target host separately.
+    return { run: true, outcome: "local", reason: "local run" };
   }
   if (env.VERCEL_ENV === "production") {
-    return { run: true, reason: "Vercel production deploy" };
+    return { run: true, outcome: "production", reason: "Vercel production deploy" };
+  }
+  if (VERCEL_ENVIRONMENTS.has(env.VERCEL_ENV)) {
+    return { run: false, outcome: "skip", reason: `skipped — VERCEL_ENV=${env.VERCEL_ENV}` };
   }
   return {
     run: false,
-    reason: `skipped — on Vercel with VERCEL_ENV=${env.VERCEL_ENV ?? "(unset)"}`,
+    outcome: "unknown",
+    reason: `refusing — on Vercel with an unrecognized VERCEL_ENV=${env.VERCEL_ENV ?? "(unset)"}`,
   };
 }
 ```
@@ -205,13 +334,13 @@ export function shouldMigrate(env) {
 
 Run: `npx vitest run scripts/should-migrate.test.mjs`
 
-Expected: `Tests  10 passed (10)`.
+Expected: `Tests  27 passed (27)`.
 
 - [ ] **Step 5: Confirm the whole suite is still green**
 
 Run: `npm test`
 
-Expected: `Test Files  2 passed (2)`, `Tests  89 passed (89)`.
+Expected: `Test Files  2 passed (2)`, `Tests  106 passed (106)`.
 
 - [ ] **Step 6: Commit**
 
@@ -234,18 +363,25 @@ Create `scripts/migrate.mjs`:
 
 ```js
 #!/usr/bin/env node
-import { shouldMigrate } from "./should-migrate.mjs";
+import { isLocal, shouldMigrate } from "./should-migrate.mjs";
 
 // The guard reads the real process environment, deliberately before .env.local is
 // loaded. `vercel env pull` can write VERCEL_ENV into that file, and a value from a
 // file must not be able to change whether we are "on Vercel".
 const decision = shouldMigrate(process.env);
 console.log(`[migrate] ${decision.reason}`);
+
+// An unrecognized Vercel environment fails the build rather than skipping quietly. A
+// silent skip on a production deploy would ship code against an un-migrated schema —
+// the outage this whole mechanism replaces. Legitimate previews report "skip", not
+// "unknown", so nothing normal is affected.
+if (decision.outcome === "unknown") process.exit(1);
 if (!decision.run) process.exit(0);
 
 // dotenv is a devDependency, so it must never be required on the deploy path. Only a
-// local run loads it, and only via dynamic import.
-if (process.env.VERCEL === undefined && process.env.VERCEL_ENV === undefined) {
+// local run loads it, and only via dynamic import. Reuses the guard's own predicate so
+// there is one definition of "on Vercel".
+if (isLocal(process.env)) {
   const { config } = await import("dotenv");
   // dotenv does not overwrite variables already in the environment, which is what makes
   // `DATABASE_URL=<prod-url> node scripts/migrate.mjs` work as an emergency override.
@@ -288,7 +424,7 @@ Task 3 removes them):
 
 Run: `VERCEL=1 VERCEL_ENV=preview npm run db:migrate`
 
-Expected: prints `[migrate] skipped — on Vercel with VERCEL_ENV=preview` and exits `0`.
+Expected: prints `[migrate] skipped — VERCEL_ENV=preview` and exits `0`.
 It must **not** print a target host — that would mean it got past the guard.
 
 Confirm the exit code explicitly:
@@ -315,7 +451,27 @@ deploy.
 Do not run the script without `VERCEL_ENV` yet. `drizzle/` does not exist, so it would
 fail on a missing journal. Task 5 is the first real run.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Verify an unrecognized Vercel environment fails the build**
+
+Run:
+
+```bash
+VERCEL=1 node scripts/migrate.mjs; echo "exit: $?"
+```
+
+Expected: `[migrate] refusing — on Vercel with an unrecognized VERCEL_ENV=(unset)` and
+`exit: 1`. This is the case that must never be a quiet green — a production build that
+skipped silently would deploy code against an un-migrated schema.
+
+Confirm a recognized skip still succeeds, so previews are unaffected:
+
+```bash
+VERCEL=1 VERCEL_ENV=development node scripts/migrate.mjs; echo "exit: $?"
+```
+
+Expected: `[migrate] skipped — VERCEL_ENV=development` and `exit: 0`.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add scripts/migrate.mjs package.json
@@ -676,8 +832,8 @@ build is never promoted.
 
 Run: `npx next build && VERCEL=1 VERCEL_ENV=preview node scripts/migrate.mjs; echo "exit: $?"`
 
-Expected: the Next build completes, then `[migrate] skipped — on Vercel with
-VERCEL_ENV=preview`, then `exit: 0`. This is exactly what a preview deploy will do.
+Expected: the Next build completes, then `[migrate] skipped — VERCEL_ENV=preview`, then
+`exit: 0`. This is exactly what a preview deploy will do.
 
 - [ ] **Step 3: Confirm the build is not type-checking the scripts**
 
@@ -912,6 +1068,12 @@ Rejected alternatives:
 - Local schema iteration is slower by one command, since every change now needs a
   generated file. That is the intended trade — the file is what makes the change
   reviewable and replayable.
+- **The guard cannot distinguish a real production deploy from `vercel build --prod` run
+  on a laptop.** That command sets `VERCEL_ENV=production` and pulls the production
+  `DATABASE_URL` into the build environment, so the "no laptop holds a production
+  schema-write credential" property rests on nobody running it, not on the guard. Left as
+  is for a single-developer app, recorded here so it is a known property rather than a
+  surprise.
 ```
 
 - [ ] **Step 2: Confirm the placeholders are filled**
@@ -966,7 +1128,7 @@ Expected: dev host, `[migrate] schema up to date`, exit `0`.
 npm test && npm run lint && npx next build
 ```
 
-Expected: `Tests  89 passed (89)`, eslint clean, build succeeds.
+Expected: `Tests  106 passed (106)`, eslint clean, build succeeds.
 
 - [ ] **Step 6: Confirm the tree is clean and scratch is untracked**
 
@@ -1001,7 +1163,7 @@ to force that proof earlier.
 
 ## Done when
 
-- `npm test` is green with the guard covered by 10 assertions.
+- `npm test` is green with the guard covered by 27 assertions.
 - `drizzle/` holds `0000` and its journal, committed.
 - Both Neon branches hold exactly one `drizzle.__drizzle_migrations` row with identical
   `hash` and `created_at`.
