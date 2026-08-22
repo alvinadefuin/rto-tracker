@@ -20,7 +20,7 @@ export function Stats({
       <MonthBlock stats={stats} fy={fy} />
       {fy && (
         <div className="border-t border-rule pt-4">
-          <FyBlock fy={fy} monthRemaining={stats.remainingNeeded} />
+          <FyBlock fy={fy} monthStats={stats} />
         </div>
       )}
     </section>
@@ -106,10 +106,10 @@ function MonthBlock({ stats, fy }: { stats: MonthStats; fy: FyStats | null }) {
 
 function FyBlock({
   fy,
-  monthRemaining,
+  monthStats,
 }: {
   fy: FyStats;
-  monthRemaining: number;
+  monthStats: MonthStats;
 }) {
   const { cumulativeOffice, cumulativeRequired, balance } = fy;
   // Full when nothing is required: an empty bar against a zero target would
@@ -145,7 +145,7 @@ function FyBlock({
           {balance > 0 && <span className="text-stamp"> +{balance}</span>}
         </p>
       </div>
-      <p className="text-sm text-fade">{fyVerdict(fy, monthRemaining)}</p>
+      <p className="text-sm text-fade">{fyVerdict(fy, monthStats)}</p>
     </div>
   );
 }

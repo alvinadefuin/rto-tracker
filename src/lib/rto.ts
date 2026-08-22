@@ -467,42 +467,63 @@ export function computeFyStats(ctx: FyContext, month: MonthStats): FyStats {
   };
 }
 
-const dayCount = (n: number) => (n === 1 ? "1 day" : `${n} days`);
-const officeDayCount = (n: number) =>
-  n === 1 ? "1 office day" : `${n} office days`;
+const plural = (n: number, one: string, many: string) =>
+  `${n} ${n === 1 ? one : many}`;
 
 /**
- * The one sentence saying what the financial year still owes. `monthRemaining`
- * is the displayed month's own shortfall, used only to say that a bank covers
- * it.
+ * The one sentence saying what the financial year still owes.
+ *
+ * Takes the whole `MonthStats` rather than its `remainingNeeded` number: the
+ * month's shortfall and the year's are different quantities, and passing
+ * `fy.remainingNeeded` by mistake would type-check while producing a plausible
+ * wrong sentence. `FyStats` is not assignable to `MonthStats`, so it cannot.
  *
  * Copy lives here rather than in the component because Vitest runs without a
  * DOM: eight branches are worth asserting, and in JSX they could not be.
  */
-export function fyVerdict(fy: FyStats, monthRemaining: number): string {
-  if (fy.cumulativeRequired === 0) {
-    return "No requirement so far — every counted day was mandated WFH.";
-  }
+export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
+  // Only the branches that name the year carry this: "FY2027 met" from two
+  // months of data is a false claim, and the block's header line is not the
+  // claim — this sentence is.
+  const windowNote = fy.isPartialWindow
+    ? ` (counted from ${formatMonth(fy.windowStartMonth)})`
+    : "";
 
   if (fy.balance > 0) {
-    const ahead = `${dayCount(fy.balance)} ahead`;
-    if (fy.isFinalMonth) return `${ahead} — FY${fy.fy} met.`;
-    if (monthRemaining > 0) {
-      return `${ahead} — this month's ${monthRemaining} remaining ${
-        monthRemaining === 1 ? "day is" : "days are"
-      } covered.`;
+    const ahead = `${plural(fy.balance, "day", "days")} ahead`;
+    if (fy.isFinalMonth) return `${ahead} — FY${fy.fy} met${windowNote}.`;
+    // The claim holds because cumulativeRequired already includes the displayed
+    // month's whole requirement: a non-negative balance means the month's
+    // remaining days are paid for. Do not "fix" the apparent contradiction of
+    // "1 day ahead" next to "9 remaining days are covered".
+    if (monthStats.remainingNeeded > 0) {
+      const remaining = plural(
+        monthStats.remainingNeeded,
+        "remaining day is",
+        "remaining days are"
+      );
+      return `${ahead} — this month's ${remaining} covered.`;
     }
     return `${ahead} — banked toward later months.`;
   }
 
+  // After the surplus branch, deliberately: a 0% target period or a month of
+  // leave reaches a zero requirement with days still banked, and the surplus is
+  // then the news. Reachable only with balance === 0, since balance equals
+  // cumulativeOffice when nothing is required — so no branch below is shadowed.
+  // Worded without naming a cause: a mandate is one of several ways here.
+  if (fy.cumulativeRequired === 0) {
+    return "No requirement — no eligible working days counted.";
+  }
+
   if (fy.balance === 0) {
     return fy.isFinalMonth
-      ? `Level — FY${fy.fy} met exactly.`
+      ? `Level — FY${fy.fy} met exactly${windowNote}.`
       : "Level — no days banked.";
   }
 
   const owed = -fy.balance;
   return fy.isFinalMonth
-    ? `${officeDayCount(owed)} short — FY${fy.fy} not met.`
-    : `${owed === 1 ? "1 more office day" : `${owed} more office days`} needed to be level.`;
+    ? `${plural(owed, "office day", "office days")} short — FY${fy.fy} not met${windowNote}.`
+    : `${plural(owed, "more office day", "more office days")} needed to be level.`;
 }
