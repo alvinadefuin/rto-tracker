@@ -63,6 +63,8 @@ function MonthBlock({
 
   // A month shortfall the year has already banked for is not a shortfall, so it
   // loses the alarm colour. The FY line below is where the number to act on is.
+  // Both colours below defer to this one flag, symmetrically: neither the
+  // month's alarm nor its celebration survives the year disagreeing.
   const owedForYear = fyStats === null || fyStats.remainingNeeded > 0;
 
   return (
@@ -90,7 +92,12 @@ function MonthBlock({
               {remainingNeeded} to go
             </span>
           ) : (
-            <span className="text-holiday">target met</span>
+            // The mirror of the line above, and the more dangerous misread of
+            // the two: "target met" in green directly above "17 more office
+            // days needed to be level". The words stay; only the colour defers.
+            <span className={owedForYear ? "text-fade" : "text-holiday"}>
+              target met
+            </span>
           )}{" "}
           · {achievedPercent}%
         </p>
