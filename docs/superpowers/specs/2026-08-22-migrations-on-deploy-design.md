@@ -234,7 +234,12 @@ Reading the environment first makes that edge case inert in both directions.
 4. Logs the target host — **host only, never the full URL**, which carries the password
    and would land in a Vercel build log.
 5. Runs `migrate(db, { migrationsFolder: "./drizzle" })` against a `neon-http` client.
-6. Logs completion and exits non-zero on any thrown error, failing the build.
+6. Logs completion and exits non-zero on any thrown error, failing the build. The error is
+   passed through `withoutSecrets(error, [url, password])` first: point 4 keeps the URL out
+   of the log deliberately, but an error raised by the driver is outside this project's
+   control and may embed the connection string it was handed. Scrubbing is cheaper than
+   trusting every future driver version. It is a pure function in `scripts/without-secrets.mjs`
+   so it can be tested, the same reason `resolvePercent` sits outside `computeMonthStats`.
 
 Plain `.mjs` rather than TypeScript is deliberate: `tsconfig.json` includes `**/*.ts` and
 `**/*.mts`, so a TS script under `scripts/` would enter `next build`'s type-check, while
@@ -373,8 +378,16 @@ unit-tested. The guard is not domain logic, but it is the only thing preventing 
 preview build from writing to production, so it is tested where it lives rather than
 moved into `src/lib` to satisfy the convention.
 
+`scripts/without-secrets.test.mjs` covers the scrubber in 6 assertions: a whole
+connection string removed from an error, a bare password removed, every occurrence
+replaced rather than the first, the stack preserved so a real failure stays debuggable,
+`undefined`/empty secrets ignored rather than redacting everything, and a thrown value
+that is not an `Error` handled.
+
 `scripts/migrate.mjs` itself is not unit-tested. It is I/O against a real database, and
-a mocked migrator would assert only that the mock was called.
+a mocked migrator would assert only that the mock was called. Its two pure concerns — the
+guard and the scrubber — are extracted precisely so that the untested remainder is only
+I/O.
 
 ## Documentation
 
