@@ -19,6 +19,8 @@ import {
   isEligible,
   financialYearOf,
   financialYearBounds,
+  shiftMonthKey,
+  monthsBetween,
   type TargetPeriod,
   type WfhMandate,
 } from "./rto";
@@ -737,5 +739,55 @@ describe("financialYearBounds", () => {
     // One month either side belongs to the neighbouring years.
     expect(financialYearOf("2026-07")).toBe(2026);
     expect(financialYearOf("2027-08")).toBe(2028);
+  });
+});
+
+describe("shiftMonthKey", () => {
+  it("steps forward and back within a year", () => {
+    expect(shiftMonthKey("2026-08", 1)).toBe("2026-09");
+    expect(shiftMonthKey("2026-08", -1)).toBe("2026-07");
+    expect(shiftMonthKey("2026-08", 0)).toBe("2026-08");
+  });
+
+  it("crosses year boundaries in both directions", () => {
+    expect(shiftMonthKey("2026-12", 1)).toBe("2027-01");
+    expect(shiftMonthKey("2026-01", -1)).toBe("2025-12");
+  });
+
+  it("handles multi-year shifts", () => {
+    expect(shiftMonthKey("2026-03", -14)).toBe("2025-01");
+    expect(shiftMonthKey("2026-03", 24)).toBe("2028-03");
+  });
+
+  it("keeps months zero-padded so string comparison stays valid", () => {
+    expect(shiftMonthKey("2026-12", 1)).toBe("2027-01");
+    expect(shiftMonthKey("2026-12", 9)).toBe("2027-09");
+  });
+});
+
+describe("monthsBetween", () => {
+  it("walks inclusively across a year boundary", () => {
+    expect(monthsBetween("2026-11", "2027-02")).toEqual([
+      "2026-11",
+      "2026-12",
+      "2027-01",
+      "2027-02",
+    ]);
+  });
+
+  it("returns a single month when start equals end", () => {
+    expect(monthsBetween("2026-08", "2026-08")).toEqual(["2026-08"]);
+  });
+
+  it("returns an empty list when start is after end", () => {
+    expect(monthsBetween("2026-09", "2026-08")).toEqual([]);
+  });
+
+  it("covers a whole financial year in twelve months", () => {
+    const { startMonth, endMonth } = financialYearBounds(2027);
+    const months = monthsBetween(startMonth, endMonth);
+    expect(months).toHaveLength(12);
+    expect(months[0]).toBe("2026-08");
+    expect(months[11]).toBe("2027-07");
   });
 });

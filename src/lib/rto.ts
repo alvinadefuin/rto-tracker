@@ -86,6 +86,28 @@ export function financialYearBounds(fy: number): {
   };
 }
 
+/**
+ * `monthKey` shifted by `delta` months. Integer month math on a year*12 index —
+ * no Date is constructed, so no timezone can intervene.
+ */
+export function shiftMonthKey(monthKey: string, delta: number): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const index = year * 12 + (month - 1) + delta;
+  return `${Math.floor(index / 12)}-${pad((index % 12) + 1)}`;
+}
+
+/**
+ * Inclusive `YYYY-MM` walk from `start` to `end`; `[]` when `start > end`.
+ * The bound is a string comparison, which is exact for fixed-width keys.
+ */
+export function monthsBetween(start: string, end: string): string[] {
+  const months: string[] = [];
+  for (let key = start; key <= end; key = shiftMonthKey(key, 1)) {
+    months.push(key);
+  }
+  return months;
+}
+
 export interface WfhMandate {
   startDate: string; // YYYY-MM-DD, inclusive
   endDate: string | null; // YYYY-MM-DD inclusive, or null = until further notice
