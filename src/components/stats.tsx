@@ -119,11 +119,13 @@ function FyBlock({
 }) {
   const { cumulativeOffice, cumulativeRequired, balance } = fyStats;
   // Full when nothing is required: an empty bar against a zero target would
-  // read as no progress rather than no obligation.
+  // read as no progress rather than no obligation. Otherwise floor, not
+  // round: rounding renders 259/260 as a solid bar sitting directly above
+  // "1 office day short", so the bar reads full only when the year is met.
   const fillPercent =
     cumulativeRequired === 0
       ? 100
-      : Math.min(100, Math.round((cumulativeOffice / cumulativeRequired) * 100));
+      : Math.min(100, Math.floor((cumulativeOffice / cumulativeRequired) * 100));
 
   // Its own landmark: this is a second subject inside "Progress", and the year
   // is the one a screen reader has no other way to skip to.
