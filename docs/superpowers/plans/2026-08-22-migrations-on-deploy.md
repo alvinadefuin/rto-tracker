@@ -379,16 +379,18 @@ import { isLocal, shouldMigrate } from "./should-migrate.mjs";
 // loaded. `vercel env pull` can write VERCEL_ENV into that file, and a value from a
 // file must not be able to change whether we are "on Vercel".
 const decision = shouldMigrate(process.env);
-console.log(`[migrate] ${decision.reason}`);
 
 // An unrecognized Vercel environment fails the build rather than skipping quietly. A
 // silent skip on a production deploy would ship code against an un-migrated schema —
 // the outage this whole mechanism replaces. Legitimate previews report "skip", not
-// "unknown", so nothing normal is affected.
+// "unknown", so nothing normal is affected. Reported on stderr because it is a build
+// failure; every other outcome is ordinary progress on stdout.
 if (decision.outcome === "unknown") {
   console.error(`[migrate] ${decision.reason}`);
   process.exit(1);
 }
+
+console.log(`[migrate] ${decision.reason}`);
 if (!decision.run) process.exit(0);
 
 // dotenv is a devDependency, so it must never be required on the deploy path. Only a
