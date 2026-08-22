@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import { isLocal, shouldMigrate } from "./should-migrate.mjs";
 import { secretsInUrl, withoutSecrets } from "./without-secrets.mjs";
 
+// Written once. The journal read and the migrator must describe the same directory, or
+// the reported count silently describes somewhere other than what was migrated.
+const MIGRATIONS_FOLDER = "./drizzle";
+
 // The guard reads the real process environment, deliberately before .env.local is
 // loaded. `vercel env pull` can write VERCEL_ENV into that file, and a value from a
 // file must not be able to change whether we are "on Vercel".
@@ -39,7 +43,10 @@ if (!url) {
 }
 
 // Gathered before anything parses the URL, because the parse itself can throw carrying
-// the connection string, and that error has to be scrubbable.
+// the connection string, and that error has to be scrubbable. secretsInUrl parses
+// internally and deliberately does not hand the parsed URL back: returning it would
+// invite a throwing call before the secrets exist, which is the bug this ordering avoids.
+// The second parse below is the price of keeping secretsInUrl total, and is worth it.
 const secrets = secretsInUrl(url);
 
 // `new URL` throws ERR_INVALID_URL with the whole connection string on an own `input`
@@ -61,20 +68,37 @@ const { drizzle } = await import("drizzle-orm/neon-http");
 const { migrate } = await import("drizzle-orm/neon-http/migrator");
 
 try {
-  const journal = JSON.parse(await readFile("./drizzle/meta/_journal.json", "utf8"));
+  const journal = JSON.parse(await readFile(`${MIGRATIONS_FOLDER}/meta/_journal.json`, "utf8"));
   const sql = neon(url);
 
-  await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
+  await migrate(drizzle(sql), { migrationsFolder: MIGRATIONS_FOLDER });
 
   // The migrator applies only journal entries newer than the newest recorded one, so a
   // migration generated out of order is skipped in silence. Reporting both counts puts
   // that in the one artifact anyone reads after a deploy — "up to date" on its own cannot
   // distinguish "applied everything" from "skipped everything".
-  const [{ recorded }] = await sql`
-    select count(*)::int as recorded from "drizzle"."__drizzle_migrations"`;
+  //
+  // This is reporting, so it must not be able to fail a deploy whose migration already
+  // succeeded. Left in the outer try, a transient hiccup here would print "failed" and
+  // exit 1 about a schema that did migrate — exactly the misleading deploy state this
+  // mechanism exists to remove. So it degrades instead.
+  let recorded = null;
+  try {
+    // Schema and table mirror drizzle's defaults (migrationsSchema "drizzle",
+    // migrationsTable "__drizzle_migrations"). migrate() creates both before doing
+    // anything else, so they exist by now even on a virgin database.
+    const rows = await sql`
+      select count(*)::int as recorded from "drizzle"."__drizzle_migrations"`;
+    recorded = rows[0].recorded;
+  } catch {
+    // Reporting only — see above.
+  }
 
+  const total = journal.entries.length;
   console.log(
-    `[migrate] up to date — ${recorded} of ${journal.entries.length} migration(s) recorded`
+    recorded === null
+      ? `[migrate] up to date — ${total} migration(s) in ${MIGRATIONS_FOLDER}, recorded count unavailable`
+      : `[migrate] up to date — ${recorded} of ${total} migration(s) recorded`
   );
 } catch (error) {
   // The driver's error is outside our control and may carry the connection string, the
