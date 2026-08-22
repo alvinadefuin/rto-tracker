@@ -1254,11 +1254,17 @@ locally with `npm run db:migrate`. See `docs/decisions/0004-migrations-on-deploy
 Run:
 
 ```bash
-grep -rn "db:push\|drizzle-kit push\|PROD_DATABASE_URL\|DRIZZLE_TARGET" \
-  CLAUDE.md README.md docs/architecture.md .env.example drizzle.config.ts package.json
+grep -rn "npm run db:push\|npx drizzle-kit push\|PROD_DATABASE_URL\|DRIZZLE_TARGET" \
+  CLAUDE.md README.md docs/architecture.md .env.example drizzle.config.ts package.json vercel.json
 ```
 
-Expected: no output. Hits in `docs/plans/` and the two older `docs/superpowers/specs/`
+Expected: no output.
+
+The pattern deliberately matches **instructions** (`npm run db:push`, `npx drizzle-kit
+push`) rather than the bare substring `drizzle-kit push`. Step 2's own replacement text
+contains the words "Never `drizzle-kit push`", so a bare-substring grep would flag the
+prohibition that is supposed to be there — and the only way to satisfy it would be to
+water down the warning. Check for the thing you want gone, not for words that resemble it. Hits in `docs/plans/` and the two older `docs/superpowers/specs/`
 files are historical records and are deliberately left alone — do not include those paths
 in this check.
 
