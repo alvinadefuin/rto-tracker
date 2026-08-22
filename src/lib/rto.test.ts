@@ -12,6 +12,7 @@ import {
   formatDate,
   formatMandateRange,
   isValidDateKey,
+  toMonthKey,
   DEFAULT_RTO_PERCENT,
   isMandated,
   mandatesOverlap,
@@ -674,5 +675,30 @@ describe("computeMonthStats with mandates", () => {
     const explicit = computeMonthStats(2026, 1, {}, DEFAULT_RTO_PERCENT, []);
     expect(bare).toEqual(explicit);
     expect(bare.mandatedDays).toBe(0);
+  });
+});
+
+describe("toMonthKey", () => {
+  it("passes a month key through unchanged", () => {
+    expect(toMonthKey("2026-08")).toBe("2026-08");
+  });
+
+  it("truncates a day key to its month", () => {
+    expect(toMonthKey("2026-08-12")).toBe("2026-08");
+    expect(toMonthKey("2026-08-01")).toBe("2026-08");
+    expect(toMonthKey("2026-12-31")).toBe("2026-12");
+  });
+
+  it("rejects an impossible day rather than truncating it", () => {
+    // The regex alone would admit this; isValidDateKey is what catches it.
+    expect(toMonthKey("2026-02-30")).toBeNull();
+  });
+
+  it("rejects a bad month, junk, and empty input", () => {
+    expect(toMonthKey("2026-13")).toBeNull();
+    expect(toMonthKey("2026-00")).toBeNull();
+    expect(toMonthKey("26-08")).toBeNull();
+    expect(toMonthKey("august")).toBeNull();
+    expect(toMonthKey("")).toBeNull();
   });
 });
