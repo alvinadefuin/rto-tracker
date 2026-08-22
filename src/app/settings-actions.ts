@@ -9,25 +9,24 @@ import { requireUserId } from "@/lib/require-user";
 import {
   formatPeriodRange,
   periodsOverlap,
+  toMonthKey,
   type TargetPeriod,
 } from "@/lib/rto";
-
-const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** Validation failures return a message; auth failures throw. */
 function parse(
   formData: FormData
 ): { ok: true; period: TargetPeriod } | { ok: false; error: string } {
-  const startMonth = String(formData.get("startMonth") ?? "");
+  const startMonth = toMonthKey(String(formData.get("startMonth") ?? ""));
   const rawEnd = String(formData.get("endMonth") ?? "").trim();
-  const endMonth = rawEnd === "" ? null : rawEnd;
+  const endMonth = rawEnd === "" ? null : toMonthKey(rawEnd);
   const percent = Number(formData.get("percent"));
 
-  if (!MONTH_RE.test(startMonth)) {
-    return { ok: false, error: "Start month must be a valid month." };
+  if (startMonth === null) {
+    return { ok: false, error: "Start month must be a valid date." };
   }
-  if (endMonth !== null && !MONTH_RE.test(endMonth)) {
-    return { ok: false, error: "End month must be a valid month, or blank." };
+  if (rawEnd !== "" && endMonth === null) {
+    return { ok: false, error: "End month must be a valid date, or blank." };
   }
   if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
     return { ok: false, error: "Percent must be a whole number from 0 to 100." };

@@ -47,10 +47,10 @@ export function PeriodForm({
             From
           </span>
           <input
-            type="month"
+            type="date"
             name="startMonth"
             required
-            defaultValue={initial?.startMonth}
+            defaultValue={initial ? `${initial.startMonth}-01` : undefined}
             className="border border-rule bg-paper px-2 py-1.5 font-mono text-sm"
           />
         </label>
@@ -59,9 +59,9 @@ export function PeriodForm({
             To
           </span>
           <input
-            type="month"
+            type="date"
             name="endMonth"
-            defaultValue={initial?.endMonth ?? ""}
+            defaultValue={initial?.endMonth ? `${initial.endMonth}-01` : ""}
             className="border border-rule bg-paper px-2 py-1.5 font-mono text-sm"
           />
         </label>
@@ -98,7 +98,8 @@ export function PeriodForm({
         )}
       </div>
       <p className="text-xs text-fade">
-        Leave <span className="font-mono">To</span> blank for an ongoing period.
+        Any day in the month works — periods run in whole months. Leave{" "}
+        <span className="font-mono">To</span> blank for an ongoing period.
       </p>
       {state?.error && (
         <p

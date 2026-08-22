@@ -199,9 +199,6 @@ const MONTH_KEY_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
  * Month key for either a `YYYY-MM` key or a `YYYY-MM-DD` day, or null when the
  * value is neither. Accepting both is what lets the settings form post whole
  * dates from a date picker while `rto_targets` keeps storing months.
- *
- * This is now the only month-key validator in the codebase: `page.tsx` and
- * `settings-actions.ts` each had their own copy of the regex above.
  */
 export function toMonthKey(value: string): string | null {
   if (MONTH_KEY_RE.test(value)) return value;
