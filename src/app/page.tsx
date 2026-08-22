@@ -61,26 +61,66 @@ export default async function Home({
     financialYearOf(monthKey)
   );
 
-  // Month the record begins. An aggregate, so one row back and no entries.
-  const [firstRow] = await db
-    .select({ first: min(dayEntries.date) })
-    .from(dayEntries)
-    .where(eq(dayEntries.userId, session.user.id));
-  const trackingStart = firstRow?.first ? firstRow.first.slice(0, 7) : null;
+  // Two waves rather than four sequential awaits: neon-http opens one HTTPS
+  // request per query with no pipelining, so every one is a full round trip.
+  // The split falls at queryStart — these two facts about the user depend on
+  // nothing, the two rowsets below depend on the window they decide.
+  const [[firstRow], periodRows] = await Promise.all([
+    // Month the record begins. An aggregate, so one row back and no entries.
+    db
+      .select({ first: min(dayEntries.date) })
+      .from(dayEntries)
+      .where(eq(dayEntries.userId, session.user.id)),
+    db
+      .select({
+        startMonth: rtoTargets.startMonth,
+        endMonth: rtoTargets.endMonth,
+        percent: rtoTargets.percent,
+      })
+      .from(rtoTargets)
+      .where(eq(rtoTargets.userId, session.user.id)),
+  ]);
 
+  const trackingStart = firstRow?.first ? firstRow.first.slice(0, 7) : null;
   const windowStart = fyWindowStart(monthKey, fyStartMonth, trackingStart);
   const queryStart = windowStart ?? monthKey;
 
-  const rows = await db
-    .select({ date: dayEntries.date, status: dayEntries.status })
-    .from(dayEntries)
-    .where(
-      and(
-        eq(dayEntries.userId, session.user.id),
-        gte(dayEntries.date, `${queryStart}-01`),
-        lte(dayEntries.date, `${monthKey}-31`)
-      )
-    );
+  const [rows, mandates] = await Promise.all([
+    db
+      .select({ date: dayEntries.date, status: dayEntries.status })
+      .from(dayEntries)
+      .where(
+        and(
+          eq(dayEntries.userId, session.user.id),
+          gte(dayEntries.date, `${queryStart}-01`),
+          lte(dayEntries.date, `${monthKey}-31`)
+        )
+      ),
+    // Mandates touching the FY window, not just this month: the aggregate needs
+    // the earlier months too. The -31 upper bound is the same string comparison
+    // trick the day_entries query uses — a bound past the end of a short month
+    // is harmless against a fixed-width key.
+    db
+      .select({
+        id: wfhMandates.id,
+        startDate: wfhMandates.startDate,
+        endDate: wfhMandates.endDate,
+        reason: wfhMandates.reason,
+      })
+      .from(wfhMandates)
+      .where(
+        and(
+          eq(wfhMandates.userId, session.user.id),
+          lte(wfhMandates.startDate, `${monthKey}-31`),
+          or(
+            isNull(wfhMandates.endDate),
+            gte(wfhMandates.endDate, `${queryStart}-01`)
+          )
+        )
+      ),
+  ]);
+
+  const targetPercent = resolvePercent(monthKey, periodRows);
 
   // The whole window feeds the aggregate; only this month's rows seed Calendar.
   const windowEntries: Entries = Object.fromEntries(
@@ -91,40 +131,6 @@ export default async function Home({
       .filter((r) => r.date.startsWith(monthKey))
       .map((r) => [r.date, r.status])
   );
-
-  const periodRows = await db
-    .select({
-      startMonth: rtoTargets.startMonth,
-      endMonth: rtoTargets.endMonth,
-      percent: rtoTargets.percent,
-    })
-    .from(rtoTargets)
-    .where(eq(rtoTargets.userId, session.user.id));
-
-  const targetPercent = resolvePercent(monthKey, periodRows);
-
-  // Mandates touching the FY window, not just this month: the aggregate needs
-  // the earlier months too. The -31 upper bound is the same string comparison
-  // trick the day_entries query uses — a bound past the end of a short month is
-  // harmless against a fixed-width key.
-  const mandates = await db
-    .select({
-      id: wfhMandates.id,
-      startDate: wfhMandates.startDate,
-      endDate: wfhMandates.endDate,
-      reason: wfhMandates.reason,
-    })
-    .from(wfhMandates)
-    .where(
-      and(
-        eq(wfhMandates.userId, session.user.id),
-        lte(wfhMandates.startDate, `${monthKey}-31`),
-        or(
-          isNull(wfhMandates.endDate),
-          gte(wfhMandates.endDate, `${queryStart}-01`)
-        )
-      )
-    );
 
   // The banner announces this month's mandates only; the widened query above
   // would otherwise list ones that ended months ago.
