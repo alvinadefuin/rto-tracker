@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { shouldMigrate } from "./should-migrate.mjs";
+import { isLocal, shouldMigrate } from "./should-migrate.mjs";
 
-describe("shouldMigrate", () => {
+describe("isLocal", () => {
+  it("is true when no Vercel variables are present", () => {
+    expect(isLocal({})).toBe(true);
+  });
+
+  it("is false when VERCEL alone is present", () => {
+    expect(isLocal({ VERCEL: "1" })).toBe(false);
+  });
+
+  it("is false when VERCEL_ENV alone is present", () => {
+    expect(isLocal({ VERCEL_ENV: "preview" })).toBe(false);
+  });
+
+  it("is false for an empty VERCEL_ENV, which is present but blank", () => {
+    expect(isLocal({ VERCEL_ENV: "" })).toBe(false);
+  });
+});
+
+describe("shouldMigrate — whether it runs", () => {
   it("runs on a laptop, where no Vercel variables exist", () => {
     expect(shouldMigrate({}).run).toBe(true);
   });
@@ -33,12 +51,74 @@ describe("shouldMigrate", () => {
   it("is case-sensitive, so 'Production' does not pass", () => {
     expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "Production" }).run).toBe(false);
   });
+});
 
-  it("names the offending value in the reason, so a build log explains itself", () => {
+describe("shouldMigrate — outcome, which decides whether the build fails", () => {
+  it("reports 'local' on a laptop", () => {
+    expect(shouldMigrate({}).outcome).toBe("local");
+  });
+
+  it("reports 'production' on a production deploy", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "production" }).outcome).toBe("production");
+  });
+
+  it("reports 'skip' for a preview, which must stay green", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "preview" }).outcome).toBe("skip");
+  });
+
+  it("reports 'skip' for a development build, which must stay green", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "development" }).outcome).toBe("skip");
+  });
+
+  it("reports 'unknown' on Vercel with VERCEL_ENV absent, so the build fails loudly", () => {
+    expect(shouldMigrate({ VERCEL: "1" }).outcome).toBe("unknown");
+  });
+
+  it("reports 'unknown' for an empty VERCEL_ENV", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "" }).outcome).toBe("unknown");
+  });
+
+  it("reports 'unknown' for a wrong-case value rather than silently skipping", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "Production" }).outcome).toBe("unknown");
+  });
+
+  it("reports 'unknown' for an environment name Vercel does not define", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "staging" }).outcome).toBe("unknown");
+  });
+});
+
+describe("shouldMigrate — strictness of the production comparison", () => {
+  it("refuses a leading-space value rather than trimming it", () => {
+    const decision = shouldMigrate({ VERCEL: "1", VERCEL_ENV: " production" });
+    expect(decision.run).toBe(false);
+    expect(decision.outcome).toBe("unknown");
+  });
+
+  it("refuses a trailing-newline value rather than trimming it", () => {
+    const decision = shouldMigrate({ VERCEL: "1", VERCEL_ENV: "production\n" });
+    expect(decision.run).toBe(false);
+    expect(decision.outcome).toBe("unknown");
+  });
+});
+
+describe("shouldMigrate — the reason string, which is what a build log shows", () => {
+  it("names the offending value on a skip", () => {
     expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "preview" }).reason).toContain("preview");
   });
 
-  it("reports a readable reason when VERCEL_ENV is unset on Vercel", () => {
+  it("says 'unset' when VERCEL_ENV is missing on Vercel", () => {
     expect(shouldMigrate({ VERCEL: "1" }).reason).toContain("unset");
+  });
+
+  it("gives a non-empty reason on the local allow path", () => {
+    expect(shouldMigrate({}).reason).toMatch(/\S/);
+  });
+
+  it("gives a non-empty reason on the production allow path", () => {
+    expect(shouldMigrate({ VERCEL: "1", VERCEL_ENV: "production" }).reason).toMatch(/\S/);
+  });
+
+  it("does not claim the local URL came from .env.local, since the emergency path passes one inline", () => {
+    expect(shouldMigrate({}).reason).not.toContain(".env.local");
   });
 });
