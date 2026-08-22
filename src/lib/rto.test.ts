@@ -17,6 +17,8 @@ import {
   isMandated,
   mandatesOverlap,
   isEligible,
+  financialYearOf,
+  financialYearBounds,
   type TargetPeriod,
   type WfhMandate,
 } from "./rto";
@@ -700,5 +702,40 @@ describe("toMonthKey", () => {
     expect(toMonthKey("26-08")).toBeNull();
     expect(toMonthKey("august")).toBeNull();
     expect(toMonthKey("")).toBeNull();
+  });
+});
+
+describe("financialYearOf", () => {
+  it("names the FY for the calendar year it ends in", () => {
+    // FY2027 runs Aug 2026 - Jul 2027.
+    expect(financialYearOf("2026-08")).toBe(2027);
+    expect(financialYearOf("2026-12")).toBe(2027);
+    expect(financialYearOf("2027-01")).toBe(2027);
+    expect(financialYearOf("2027-07")).toBe(2027);
+  });
+
+  it("flips at the July/August boundary", () => {
+    expect(financialYearOf("2026-07")).toBe(2026);
+    expect(financialYearOf("2026-08")).toBe(2027);
+    expect(financialYearOf("2027-07")).toBe(2027);
+    expect(financialYearOf("2027-08")).toBe(2028);
+  });
+});
+
+describe("financialYearBounds", () => {
+  it("returns August of the previous year through July", () => {
+    expect(financialYearBounds(2027)).toEqual({
+      startMonth: "2026-08",
+      endMonth: "2027-07",
+    });
+  });
+
+  it("round-trips with financialYearOf at both ends", () => {
+    const { startMonth, endMonth } = financialYearBounds(2027);
+    expect(financialYearOf(startMonth)).toBe(2027);
+    expect(financialYearOf(endMonth)).toBe(2027);
+    // One month either side belongs to the neighbouring years.
+    expect(financialYearOf("2026-07")).toBe(2026);
+    expect(financialYearOf("2027-08")).toBe(2028);
   });
 });

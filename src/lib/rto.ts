@@ -55,6 +55,37 @@ export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean {
   );
 }
 
+/**
+ * Financial years start in August. Hardcoded rather than configurable: one
+ * employer, one calendar. The maths below assumes a start month after January,
+ * which August is.
+ */
+const FY_START_MONTH = 8;
+
+/**
+ * Financial year containing `monthKey`, named for the calendar year it **ends**
+ * in — FY2027 runs Aug 2026 through Jul 2027.
+ *
+ * Takes a month key rather than reading the clock, deliberately: every caller
+ * derives the year from the month on screen, which is what keeps server output
+ * timezone-independent.
+ */
+export function financialYearOf(monthKey: string): number {
+  const [year, month] = monthKey.split("-").map(Number);
+  return month >= FY_START_MONTH ? year + 1 : year;
+}
+
+/** First and last month of `fy`, inclusive. */
+export function financialYearBounds(fy: number): {
+  startMonth: string;
+  endMonth: string;
+} {
+  return {
+    startMonth: `${fy - 1}-${pad(FY_START_MONTH)}`,
+    endMonth: `${fy}-${pad(FY_START_MONTH - 1)}`,
+  };
+}
+
 export interface WfhMandate {
   startDate: string; // YYYY-MM-DD, inclusive
   endDate: string | null; // YYYY-MM-DD inclusive, or null = until further notice
