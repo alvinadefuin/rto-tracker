@@ -57,11 +57,18 @@ Rejected alternatives:
   employer would compute for that year. The block says `counted from <month>` when so.
 - Reviewing a past FY works, and reviewing a month before the record starts shows no FY
   block at all.
+- Browsing *forward* has no matching floor. Eleven presses of the next-month arrow reach
+  next July and show that year's full requirement against whatever is recorded so far,
+  which is usually nothing. `isFinalMonth` compares month keys and cannot know whether
+  the year has happened, so the verdict is worded as a shortfall against the full year
+  rather than as a year not met.
 - Nothing crosses a July boundary. A surplus banked in FY2027 is gone in FY2028.
 - No schema change: the balance is derived on every render from `day_entries`,
-  `rto_targets` and `wfh_mandates`. The cost is one extra aggregate query plus a
-  `day_entries` range of at most twelve months for one user, both served by the
-  `(user_id, date)` primary key.
+  `rto_targets` and `wfh_mandates`. The cost is one extra aggregate query, a
+  `day_entries` range of at most twelve months for one user, and the `wfh_mandates`
+  query widened from the displayed month to that same window — the aggregate needs the
+  earlier months' exclusions too. Each still reads through a `(user_id, …)` index — the
+  `day_entries` primary key, and `wfh_mandates_user_start_idx`.
 - `page.tsx` sends the client two numbers for the prior months rather than their entries,
   so the FY figures stay recomputable locally without shipping the year's history.
 - Dropping the page's own `MONTH_RE` for `toMonthKey` widened `?m=` to accept a full
