@@ -577,6 +577,10 @@ import { readFile } from "node:fs/promises";
 import { isLocal, shouldMigrate } from "./should-migrate.mjs";
 import { secretsInUrl, withoutSecrets } from "./without-secrets.mjs";
 
+// Written once. The journal read and the migrator must describe the same directory, or
+// the reported count silently describes somewhere other than what was migrated.
+const MIGRATIONS_FOLDER = "./drizzle";
+
 // The guard reads the real process environment, deliberately before .env.local is
 // loaded. `vercel env pull` can write VERCEL_ENV into that file, and a value from a
 // file must not be able to change whether we are "on Vercel".
@@ -613,7 +617,10 @@ if (!url) {
 }
 
 // Gathered before anything parses the URL, because the parse itself can throw carrying
-// the connection string, and that error has to be scrubbable.
+// the connection string, and that error has to be scrubbable. secretsInUrl parses
+// internally and deliberately does not hand the parsed URL back: returning it would
+// invite a throwing call before the secrets exist, which is the bug this ordering avoids.
+// The second parse below is the price of keeping secretsInUrl total, and is worth it.
 const secrets = secretsInUrl(url);
 
 // `new URL` throws ERR_INVALID_URL with the whole connection string on an own `input`
@@ -635,20 +642,37 @@ const { drizzle } = await import("drizzle-orm/neon-http");
 const { migrate } = await import("drizzle-orm/neon-http/migrator");
 
 try {
-  const journal = JSON.parse(await readFile("./drizzle/meta/_journal.json", "utf8"));
+  const journal = JSON.parse(await readFile(`${MIGRATIONS_FOLDER}/meta/_journal.json`, "utf8"));
   const sql = neon(url);
 
-  await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
+  await migrate(drizzle(sql), { migrationsFolder: MIGRATIONS_FOLDER });
 
   // The migrator applies only journal entries newer than the newest recorded one, so a
   // migration generated out of order is skipped in silence. Reporting both counts puts
   // that in the one artifact anyone reads after a deploy — "up to date" on its own cannot
   // distinguish "applied everything" from "skipped everything".
-  const [{ recorded }] = await sql`
-    select count(*)::int as recorded from "drizzle"."__drizzle_migrations"`;
+  //
+  // This is reporting, so it must not be able to fail a deploy whose migration already
+  // succeeded. Left in the outer try, a transient hiccup here would print "failed" and
+  // exit 1 about a schema that did migrate — exactly the misleading deploy state this
+  // mechanism exists to remove. So it degrades instead.
+  let recorded = null;
+  try {
+    // Schema and table mirror drizzle's defaults (migrationsSchema "drizzle",
+    // migrationsTable "__drizzle_migrations"). migrate() creates both before doing
+    // anything else, so they exist by now even on a virgin database.
+    const rows = await sql`
+      select count(*)::int as recorded from "drizzle"."__drizzle_migrations"`;
+    recorded = rows[0].recorded;
+  } catch {
+    // Reporting only — see above.
+  }
 
+  const total = journal.entries.length;
   console.log(
-    `[migrate] up to date — ${recorded} of ${journal.entries.length} migration(s) recorded`
+    recorded === null
+      ? `[migrate] up to date — ${total} migration(s) in ${MIGRATIONS_FOLDER}, recorded count unavailable`
+      : `[migrate] up to date — ${recorded} of ${total} migration(s) recorded`
   );
 } catch (error) {
   // The driver's error is outside our control and may carry the connection string, the
@@ -989,8 +1013,12 @@ already baselined — stop and check with `scratch/inspect.mjs` before doing any
 Run: `npm run db:migrate`
 
 Expected: `[migrate] local run — applying to DATABASE_URL from .env.local`,
-`[migrate] target host: ep-flat-unit-azuxnnpa-...`, `[migrate] schema up to date`, exit
-`0`.
+`[migrate] target host: ep-flat-unit-azuxnnpa-...`, `[migrate] up to date — 1 of 1
+migration(s) recorded`, exit `0`.
+
+The `1 of 1` is the assertion, not decoration: the journal holds one entry and the seeded
+row is the one recording it. `0 of 1` would mean the baseline row never landed; `1 of 2`
+would mean a migration was skipped.
 
 This is the proof the baseline took. If the row were missing or its `when` were wrong,
 the migrator would attempt `CREATE TABLE "user"` and fail loudly with an already-exists
@@ -1053,7 +1081,8 @@ DATABASE_URL="$(grep '^PROD_DATABASE_URL=' .env.local | cut -d= -f2- | tr -d '"'
 ```
 
 Expected: `[migrate] Vercel production deploy`, `[migrate] target host:
-ep-wild-sky-azqwwjy9-...`, `[migrate] schema up to date`, exit `0`.
+ep-wild-sky-azqwwjy9-...`, `[migrate] up to date — 1 of 1 migration(s) recorded`, exit
+`0`. Same `1 of 1` reasoning as Task 5 — and it must be the production host on this run.
 
 This exercises the exact code path the Vercel build will take, against the real
 production branch, while there is nothing pending to apply. It also demonstrates the
@@ -1329,6 +1358,10 @@ Rejected alternatives:
 - Local schema iteration is slower by one command, since every change now needs a
   generated file. That is the intended trade — the file is what makes the change
   reviewable and replayable.
+- **A failed migration's SQL is echoed into the build log.** Drizzle reports failures as
+  `Failed query: <SQL>`, so the statement text appears verbatim. Harmless for DDL, and
+  useful when diagnosing — but it means a migration must never embed a literal secret in
+  its SQL, because that secret would land in a durable log on failure.
 - **A failed migration can leave the schema partially changed.** The `neon-http` migrator
   runs each statement as its own HTTP round-trip with no enclosing transaction, and inserts
   journal rows only after every migration has applied. A failure part-way through therefore
@@ -1387,7 +1420,7 @@ Expected: no output.
 
 Run: `npm run db:migrate`
 
-Expected: dev host, `[migrate] schema up to date`, exit `0`.
+Expected: dev host, `[migrate] up to date — 1 of 1 migration(s) recorded`, exit `0`.
 
 - [ ] **Step 5: Full green check**
 
@@ -1411,7 +1444,8 @@ Then, in the Vercel build log for that production deployment, confirm:
 
 - `[migrate] Vercel production deploy`
 - `[migrate] target host: ep-wild-sky-azqwwjy9-...`
-- `[migrate] schema up to date`
+- `[migrate] up to date — 1 of 1 migration(s) recorded` — the counts matching is the
+  signal; if they ever diverge, a migration was skipped silently
 
 If instead it prints `[migrate] DATABASE_URL is not set`, the variable is not scoped to
 the Production environment in Vercel project settings. The build failed rather than
