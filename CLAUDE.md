@@ -146,10 +146,13 @@ browsing last July shows that year's verdict.
 
 The FY window starts at the later of the FY's first month and the month of the user's
 earliest `day_entries` row, so an FY that predates the app reports nothing rather than a
-hundred-day deficit. `page.tsx` hands `<Calendar>` an `FyContext` holding **two numbers**
-for the prior months, not their entries — only the displayed month is editable from that
-view, so the client adds its live month to a fixed prior and re-runs the same single
-`ceil`.
+hundred-day deficit. That rule is `fyWindowStart`, not a ternary in the page.
+`page.tsx` hands `<Calendar>` an `FyBaseline` holding **two numbers** for the prior
+months, not their entries — only the displayed month is editable from that view, so the
+client adds its live month to a fixed prior and re-runs the same single `ceil`.
+`FyBaseline` carries nothing derivable: `computeFyStats` takes the displayed month key
+and works out the year and its bounds itself, so no caller can pair a July with another
+year's bounds.
 
 ### Data flow
 
