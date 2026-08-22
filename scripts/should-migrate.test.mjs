@@ -44,7 +44,7 @@ describe("shouldMigrate — whether it runs", () => {
     expect(shouldMigrate({ VERCEL_ENV: "production" }).run).toBe(true);
   });
 
-  it("treats an empty VERCEL_ENV as a skip, not as absent", () => {
+  it("treats an empty VERCEL_ENV as present-but-invalid, not as absent", () => {
     expect(shouldMigrate({ VERCEL_ENV: "" }).run).toBe(false);
   });
 
