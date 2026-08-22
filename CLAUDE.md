@@ -32,8 +32,12 @@ via dotenv; Next loads it on its own.
 **Schema changes travel as committed migrations, and production applies them on deploy.**
 One Neon project, two branches. Locally `DATABASE_URL` is the dev branch
 (`br-small-salad-az4cwdel`); on Vercel that same variable name is the default
-`production` branch (`br-flat-night-azuif9ye`). Nothing on your laptop holds a production
-schema-write credential, and nothing needs to.
+`production` branch (`br-flat-night-azuif9ye`). No production connection string lives on
+your laptop any more, so no command can target production by reading a variable.
+
+That stops accidents, not determined access: both branches share the `neondb_owner` role
+and its password, so the dev URL differs from production's only by hostname. A separate
+lower-privileged dev role would close that; there isn't one today.
 
 Editing `src/db/schema.ts` means:
 

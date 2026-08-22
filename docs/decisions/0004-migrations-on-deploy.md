@@ -27,8 +27,8 @@ build, and a failed build is never promoted.
 
 `PROD_DATABASE_URL`, `DRIZZLE_TARGET`, `db:push`, and `db:push:prod` are deleted. On
 Vercel `DATABASE_URL` is already the production branch and locally it is already dev, so
-one variable is correct in both places and no laptop holds a production schema-write
-credential. The emergency path is an inline `DATABASE_URL=<prod-url> node
+one variable is correct in both places and no laptop holds a production connection
+string. See the consequence below for what that does and does not buy. The emergency path is an inline `DATABASE_URL=<prod-url> node
 scripts/migrate.mjs`, which works because `dotenv` does not overwrite variables already
 set in the environment.
 
@@ -93,6 +93,13 @@ Rejected alternatives:
   leaves earlier statements applied and unjournalled, and every later build fails on
   already-existing objects until a human repairs it. Keeping each migration small and
   additive is what limits the blast radius; there is no automatic recovery.
+- **Removing `PROD_DATABASE_URL` prevents accidents, not determined access.** Both Neon
+  branches share the `neondb_owner` role and therefore the same password, so the dev
+  connection string differs from production's only by hostname. What the deletion actually
+  buys is that no command can target production by reading a variable, and no routine
+  hands anyone a production URL — the class of mistake that caused both outages. It does
+  not make production unreachable from a laptop. A separate, lower-privileged dev role
+  would buy that; there isn't one today.
 - **The guard cannot distinguish a real production deploy from `vercel build --prod` run
   on a laptop.** That command sets `VERCEL_ENV=production` and pulls the production
   `DATABASE_URL` into the build environment, so the "no laptop holds a production
