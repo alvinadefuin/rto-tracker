@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { isLocal, shouldMigrate } from "./should-migrate.mjs";
-import { withoutSecrets } from "./without-secrets.mjs";
+import { secretsInUrl, withoutSecrets } from "./without-secrets.mjs";
 
 // The guard reads the real process environment, deliberately before .env.local is
 // loaded. `vercel env pull` can write VERCEL_ENV into that file, and a value from a
@@ -37,8 +38,22 @@ if (!url) {
   process.exit(1);
 }
 
+// Gathered before anything parses the URL, because the parse itself can throw carrying
+// the connection string, and that error has to be scrubbable.
+const secrets = secretsInUrl(url);
+
+// `new URL` throws ERR_INVALID_URL with the whole connection string on an own `input`
+// property, and Node's uncaught-exception printer inspects own properties — so an
+// unguarded parse prints the password straight into a durable build log.
+let target;
+try {
+  target = new URL(url);
+} catch (error) {
+  console.error("[migrate] DATABASE_URL is not a valid URL:", withoutSecrets(error, secrets));
+  process.exit(1);
+}
+
 // Host only. The full URL carries the password and build logs are durable.
-const target = new URL(url);
 console.log(`[migrate] target host: ${target.host}`);
 
 const { neon } = await import("@neondatabase/serverless");
@@ -46,12 +61,24 @@ const { drizzle } = await import("drizzle-orm/neon-http");
 const { migrate } = await import("drizzle-orm/neon-http/migrator");
 
 try {
-  await migrate(drizzle(neon(url)), { migrationsFolder: "./drizzle" });
-  console.log("[migrate] schema up to date");
+  const journal = JSON.parse(await readFile("./drizzle/meta/_journal.json", "utf8"));
+  const sql = neon(url);
+
+  await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
+
+  // The migrator applies only journal entries newer than the newest recorded one, so a
+  // migration generated out of order is skipped in silence. Reporting both counts puts
+  // that in the one artifact anyone reads after a deploy — "up to date" on its own cannot
+  // distinguish "applied everything" from "skipped everything".
+  const [{ recorded }] = await sql`
+    select count(*)::int as recorded from "drizzle"."__drizzle_migrations"`;
+
+  console.log(
+    `[migrate] up to date — ${recorded} of ${journal.entries.length} migration(s) recorded`
+  );
 } catch (error) {
-  // The driver's error is outside our control and may carry the connection string it was
-  // given. Scrub the URL and its password rather than trusting the driver to have kept
-  // them out of the message.
-  console.error("[migrate] failed:", withoutSecrets(error, [url, target.password]));
+  // The driver's error is outside our control and may carry the connection string, the
+  // encoded password, or the decoded one. secretsInUrl covers all three.
+  console.error("[migrate] failed:", withoutSecrets(error, secrets));
   process.exit(1);
 }
