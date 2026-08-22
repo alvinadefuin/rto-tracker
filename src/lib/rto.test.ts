@@ -22,6 +22,8 @@ import {
   shiftMonthKey,
   monthsBetween,
   mandateTouchesMonth,
+  aggregateMonths,
+  type Entries,
   type TargetPeriod,
   type WfhMandate,
 } from "./rto";
@@ -830,5 +832,66 @@ describe("mandateTouchesMonth", () => {
   it("handles a short month, where the -31 upper bound is not a real day", () => {
     const feb: WfhMandate = { startDate: "2026-02-27", endDate: "2026-02-28" };
     expect(mandateTouchesMonth(feb, "2026-02")).toBe(true);
+  });
+});
+
+describe("aggregateMonths", () => {
+  // Aug 2026 has 21 weekdays, Sep 2026 has 22.
+  const AUG_SEP = ["2026-08", "2026-09"];
+
+  it("sums weighted eligible days at the default rate", () => {
+    expect(aggregateMonths(AUG_SEP, {}, [], [])).toEqual({
+      officeDays: 0,
+      weightedEligible: (21 + 22) * 40,
+    });
+  });
+
+  it("resolves the percentage per month, not once for the window", () => {
+    const periods: TargetPeriod[] = [
+      { startMonth: "2026-09", endMonth: "2026-09", percent: 60 },
+    ];
+    // August falls outside the period and keeps the 40% default.
+    expect(aggregateMonths(AUG_SEP, {}, periods, []).weightedEligible).toBe(
+      21 * 40 + 22 * 60
+    );
+  });
+
+  it("counts office days across the whole window", () => {
+    const entries: Entries = {
+      "2026-08-03": "office", // Mon
+      "2026-08-04": "office", // Tue
+      "2026-09-01": "office", // Tue
+    };
+    expect(aggregateMonths(AUG_SEP, entries, [], []).officeDays).toBe(3);
+  });
+
+  it("drops leave and holiday days from the weighted total", () => {
+    const entries: Entries = {
+      "2026-08-05": "leave", // Wed
+      "2026-09-01": "holiday", // Tue
+    };
+    expect(aggregateMonths(AUG_SEP, entries, [], []).weightedEligible).toBe(
+      20 * 40 + 21 * 40
+    );
+  });
+
+  it("contributes nothing for a fully mandated month", () => {
+    const mandates: WfhMandate[] = [
+      { startDate: "2026-08-01", endDate: "2026-08-31" },
+    ];
+    // An office stamp inside the mandate is still excluded, exactly as
+    // computeMonthStats excludes it.
+    const entries: Entries = { "2026-08-03": "office" };
+    expect(aggregateMonths(AUG_SEP, entries, [], mandates)).toEqual({
+      officeDays: 0,
+      weightedEligible: 22 * 40,
+    });
+  });
+
+  it("returns zeros for an empty month list", () => {
+    expect(aggregateMonths([], {}, [], [])).toEqual({
+      officeDays: 0,
+      weightedEligible: 0,
+    });
   });
 });

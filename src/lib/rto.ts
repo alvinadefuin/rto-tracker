@@ -372,3 +372,41 @@ export function computeMonthStats(
     weeks,
   };
 }
+
+export interface MonthsAggregate {
+  officeDays: number;
+  /**
+   * Σ (eligibleDays × targetPercent) across the months, in percent-points and
+   * deliberately **un-rounded**. Dividing by 100 exactly once, at the end, in
+   * computeFyStats is the whole point: it is what makes a 260-weekday year at
+   * 40% owe 104 days rather than the ~110 that twelve monthly round-ups cost.
+   */
+  weightedEligible: number;
+}
+
+/**
+ * Roll up whole months. Each month resolves its own percentage, so a rate
+ * change part-way through the window is honoured.
+ *
+ * Goes through computeMonthStats even though the weeks array it builds is
+ * thrown away: eleven months of throwaway arrays once per render is nothing,
+ * and it keeps exactly one definition of an eligible day. A second, leaner
+ * counting path is how the two drift apart.
+ */
+export function aggregateMonths(
+  months: string[],
+  entries: Entries,
+  periods: TargetPeriod[],
+  mandates: WfhMandate[]
+): MonthsAggregate {
+  let officeDays = 0;
+  let weightedEligible = 0;
+  for (const monthKey of months) {
+    const [year, month] = monthKey.split("-").map(Number);
+    const percent = resolvePercent(monthKey, periods);
+    const stats = computeMonthStats(year, month, entries, percent, mandates);
+    officeDays += stats.officeDays;
+    weightedEligible += stats.eligibleDays * percent;
+  }
+  return { officeDays, weightedEligible };
+}
