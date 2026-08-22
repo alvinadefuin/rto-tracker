@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { isLocal, shouldMigrate } from "./should-migrate.mjs";
+import { withoutSecrets } from "./without-secrets.mjs";
 
 // The guard reads the real process environment, deliberately before .env.local is
 // loaded. `vercel env pull` can write VERCEL_ENV into that file, and a value from a
@@ -37,7 +38,8 @@ if (!url) {
 }
 
 // Host only. The full URL carries the password and build logs are durable.
-console.log(`[migrate] target host: ${new URL(url).host}`);
+const target = new URL(url);
+console.log(`[migrate] target host: ${target.host}`);
 
 const { neon } = await import("@neondatabase/serverless");
 const { drizzle } = await import("drizzle-orm/neon-http");
@@ -47,6 +49,9 @@ try {
   await migrate(drizzle(neon(url)), { migrationsFolder: "./drizzle" });
   console.log("[migrate] schema up to date");
 } catch (error) {
-  console.error("[migrate] failed:", error);
+  // The driver's error is outside our control and may carry the connection string it was
+  // given. Scrub the URL and its password rather than trusting the driver to have kept
+  // them out of the message.
+  console.error("[migrate] failed:", withoutSecrets(error, [url, target.password]));
   process.exit(1);
 }
