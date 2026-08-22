@@ -3,12 +3,14 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { setDayStatus } from "@/app/actions";
 import {
+  computeFyStats,
   computeMonthStats,
   isEligible,
   isMandated,
   isWeekend,
   type DayStatus,
   type Entries,
+  type FyContext,
   type WfhMandate,
 } from "@/lib/rto";
 import { Stats } from "@/components/stats";
@@ -77,12 +79,14 @@ export function Calendar({
   initialEntries,
   targetPercent,
   mandates,
+  fyContext,
 }: {
   year: number;
   month: number;
   initialEntries: Entries;
   targetPercent: number;
   mandates: WfhMandate[];
+  fyContext: FyContext | null;
 }) {
   const [entries, setEntries] = useState<Entries>(initialEntries);
   const [toast, setToast] = useState<string | null>(null);
@@ -101,6 +105,9 @@ export function Calendar({
   );
 
   const stats = computeMonthStats(year, month, entries, targetPercent, mandates);
+  // Recomputed on every tap from the same fixed prior window: the months before
+  // this one are not editable from here, so the only moving part is `entries`.
+  const fyStats = fyContext ? computeFyStats(fyContext, stats) : null;
   const weeks = monthGrid(year, month);
 
   function showToast(message: string) {
@@ -138,7 +145,7 @@ export function Calendar({
 
   return (
     <div className="space-y-6">
-      <Stats stats={stats} />
+      <Stats stats={stats} fy={fyStats} />
 
       <div className="border border-rule bg-white/40">
         <div className={`${gridCols} border-b border-rule`}>
