@@ -3,22 +3,13 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-// One Neon project, two branches, two URLs — see CLAUDE.md. `npm run db:push`
-// targets the dev branch (DATABASE_URL); `npm run db:push:prod` sets
-// DRIZZLE_TARGET=prod to reach the branch Vercel reads (PROD_DATABASE_URL).
-// A schema change is only shipped once it has gone to both.
-const isProd = process.env.DRIZZLE_TARGET === "prod";
-const urlVar = isProd ? "PROD_DATABASE_URL" : "DATABASE_URL";
-const url = process.env[urlVar];
+// One variable, correct in both places it is read: locally `.env.local` points it at the
+// Neon dev branch, and on Vercel the project's own DATABASE_URL is the production
+// branch. Nothing on a laptop holds a production schema-write credential.
+const url = process.env.DATABASE_URL;
 
 if (!url) {
-  throw new Error(
-    `${urlVar} is not set in .env.local (drizzle target: ${isProd ? "prod" : "dev"})`
-  );
-}
-
-if (isProd) {
-  console.warn("\n⚠  drizzle target: PRODUCTION branch — this is the DB Vercel reads.\n");
+  throw new Error("DATABASE_URL is not set in .env.local");
 }
 
 export default defineConfig({

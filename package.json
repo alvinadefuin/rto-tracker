@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run --passWithNoTests",
-    "db:push": "drizzle-kit push",
-    "db:push:prod": "DRIZZLE_TARGET=prod drizzle-kit push"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:check": "drizzle-kit check"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",

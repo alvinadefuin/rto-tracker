@@ -39,7 +39,7 @@ Fill in `DATABASE_URL`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`.
 
 ```bash
 npm install
-npx drizzle-kit push   # creates auth + day_entries tables in Neon
+npm run db:migrate     # creates the tables in your Neon branch
 npm run dev
 ```
 
