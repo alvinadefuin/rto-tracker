@@ -1,13 +1,23 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, min, or } from "drizzle-orm";
 import { auth, signOut } from "@/auth";
 import { db } from "@/db";
 import { dayEntries, rtoTargets, wfhMandates } from "@/db/schema";
-import { formatDate, resolvePercent, type Entries } from "@/lib/rto";
+import {
+  aggregateMonths,
+  financialYearBounds,
+  financialYearOf,
+  formatDate,
+  mandateTouchesMonth,
+  monthsBetween,
+  resolvePercent,
+  shiftMonthKey,
+  toMonthKey,
+  type Entries,
+  type FyContext,
+} from "@/lib/rto";
 import { Calendar } from "@/components/calendar";
-
-const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 const MONTH_NAMES = [
   "January",
@@ -31,11 +41,6 @@ function currentMonthKey(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
 }
 
-function shiftMonth(year: number, month: number, delta: number): string {
-  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1));
-  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}`;
-}
-
 export default async function Home({
   searchParams,
 }: {
@@ -45,8 +50,35 @@ export default async function Home({
   if (!session?.user?.id) redirect("/signin");
 
   const { m } = await searchParams;
-  const monthKey = m && MONTH_RE.test(m) ? m : currentMonthKey();
+  const monthKey = (m ? toMonthKey(m) : null) ?? currentMonthKey();
   const [year, month] = monthKey.split("-").map(Number);
+
+  // The FY on screen follows the month on screen, never the clock — that is
+  // what keeps this render timezone-independent, and it is what lets you review
+  // a finished year.
+  const fy = financialYearOf(monthKey);
+  const { startMonth: fyStartMonth, endMonth: fyEndMonth } =
+    financialYearBounds(fy);
+
+  // Month the record begins. An aggregate, so one row back and no entries.
+  const [firstRow] = await db
+    .select({ first: min(dayEntries.date) })
+    .from(dayEntries)
+    .where(eq(dayEntries.userId, session.user.id));
+  const trackingStart = firstRow?.first ? firstRow.first.slice(0, 7) : null;
+
+  // Later of the FY's first month and the month tracking began: browsing an FY
+  // that predates the app must not report a hundred-day deficit for months that
+  // were never recorded. null when nothing exists at or before this month — in
+  // which case there is no history to carry, and the displayed month is empty
+  // too, trackingStart being the earliest row there is.
+  const windowStart =
+    trackingStart === null || trackingStart > monthKey
+      ? null
+      : trackingStart > fyStartMonth
+        ? trackingStart
+        : fyStartMonth;
+  const queryStart = windowStart ?? monthKey;
 
   const rows = await db
     .select({ date: dayEntries.date, status: dayEntries.status })
@@ -54,13 +86,19 @@ export default async function Home({
     .where(
       and(
         eq(dayEntries.userId, session.user.id),
-        gte(dayEntries.date, `${monthKey}-01`),
+        gte(dayEntries.date, `${queryStart}-01`),
         lte(dayEntries.date, `${monthKey}-31`)
       )
     );
 
-  const entries: Entries = Object.fromEntries(
+  // The whole window feeds the aggregate; only this month's rows seed Calendar.
+  const windowEntries: Entries = Object.fromEntries(
     rows.map((r) => [r.date, r.status])
+  );
+  const entries: Entries = Object.fromEntries(
+    rows
+      .filter((r) => r.date.startsWith(monthKey))
+      .map((r) => [r.date, r.status])
   );
 
   const periodRows = await db
@@ -74,9 +112,10 @@ export default async function Home({
 
   const targetPercent = resolvePercent(monthKey, periodRows);
 
-  // Only mandates touching this month. The -31 upper bound is the same string
-  // comparison trick the day_entries query uses: a bound past the end of a
-  // short month is harmless against a fixed-width key.
+  // Mandates touching the FY window, not just this month: the aggregate needs
+  // the earlier months too. The -31 upper bound is the same string comparison
+  // trick the day_entries query uses — a bound past the end of a short month is
+  // harmless against a fixed-width key.
   const mandates = await db
     .select({
       id: wfhMandates.id,
@@ -91,10 +130,36 @@ export default async function Home({
         lte(wfhMandates.startDate, `${monthKey}-31`),
         or(
           isNull(wfhMandates.endDate),
-          gte(wfhMandates.endDate, `${monthKey}-01`)
+          gte(wfhMandates.endDate, `${queryStart}-01`)
         )
       )
     );
+
+  // The banner announces this month's mandates only; the widened query above
+  // would otherwise list ones that ended months ago.
+  const monthMandates = mandates.filter((x) =>
+    mandateTouchesMonth(x, monthKey)
+  );
+
+  // Two numbers, not the earlier months' entries: only the displayed month is
+  // editable from here, so everything before it is constant for the life of the
+  // mount and the client can re-run the single ceil on its own.
+  const fyContext: FyContext | null =
+    windowStart === null
+      ? null
+      : {
+          fy,
+          monthKey,
+          fyStartMonth,
+          fyEndMonth,
+          windowStartMonth: windowStart,
+          prior: aggregateMonths(
+            monthsBetween(windowStart, shiftMonthKey(monthKey, -1)),
+            windowEntries,
+            periodRows,
+            mandates
+          ),
+        };
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
@@ -131,14 +196,14 @@ export default async function Home({
           </h1>
           <nav className="flex items-center gap-1" aria-label="Change month">
             <Link
-              href={`/?m=${shiftMonth(year, month, -1)}`}
+              href={`/?m=${shiftMonthKey(monthKey, -1)}`}
               aria-label="Previous month"
               className="border border-rule px-3 py-1.5 font-mono text-sm hover:bg-ink/5"
             >
               ←
             </Link>
             <Link
-              href={`/?m=${shiftMonth(year, month, 1)}`}
+              href={`/?m=${shiftMonthKey(monthKey, 1)}`}
               aria-label="Next month"
               className="border border-rule px-3 py-1.5 font-mono text-sm hover:bg-ink/5"
             >
@@ -146,15 +211,15 @@ export default async function Home({
             </Link>
           </nav>
         </div>
-        {mandates.length > 0 && (
+        {monthMandates.length > 0 && (
           <div className="mt-4 space-y-1 border-l-2 border-fade pl-3">
-            {mandates.map((m) => (
-              <p key={m.id} className="font-mono text-xs text-fade">
+            {monthMandates.map((x) => (
+              <p key={x.id} className="font-mono text-xs text-fade">
                 Mandated WFH{" "}
-                {m.endDate === null
-                  ? `from ${formatDate(m.startDate)} — until further notice`
-                  : `${formatDate(m.startDate)} – ${formatDate(m.endDate)}`}
-                {m.reason ? ` (${m.reason})` : ""}
+                {x.endDate === null
+                  ? `from ${formatDate(x.startDate)} — until further notice`
+                  : `${formatDate(x.startDate)} – ${formatDate(x.endDate)}`}
+                {x.reason ? ` (${x.reason})` : ""}
               </p>
             ))}
           </div>
@@ -172,6 +237,7 @@ export default async function Home({
         initialEntries={entries}
         targetPercent={targetPercent}
         mandates={mandates}
+        fyContext={fyContext}
       />
     </main>
   );
