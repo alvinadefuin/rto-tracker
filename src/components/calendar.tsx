@@ -148,7 +148,7 @@ export function Calendar({
 
   return (
     <div className="space-y-6">
-      <Stats stats={stats} fy={fyStats} />
+      <Stats stats={stats} fyStats={fyStats} />
 
       <div className="border border-rule bg-white/40">
         <div className={`${gridCols} border-b border-rule`}>

@@ -64,3 +64,6 @@ Rejected alternatives:
   `(user_id, date)` primary key.
 - `page.tsx` sends the client two numbers for the prior months rather than their entries,
   so the FY figures stay recomputable locally without shipping the year's history.
+- Dropping the page's own `MONTH_RE` for `toMonthKey` widened `?m=` to accept a full
+  `YYYY-MM-DD` date, which normalises to its month. A link to a day now shows that day's
+  month rather than falling back to today's.

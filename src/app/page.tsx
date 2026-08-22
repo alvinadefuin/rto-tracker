@@ -56,7 +56,9 @@ export default async function Home({
 
   // The FY on screen follows the month on screen, never the clock — that is
   // what keeps this render timezone-independent, and it is what lets you review
-  // a finished year.
+  // a finished year. With no ?m= the month itself comes from the server clock,
+  // so a default render near a month boundary can land on the previous FY, not
+  // merely the previous month.
   const { startMonth: fyStartMonth } = financialYearBounds(
     financialYearOf(monthKey)
   );
@@ -123,10 +125,12 @@ export default async function Home({
   const targetPercent = resolvePercent(monthKey, periodRows);
 
   // The whole window feeds the aggregate; only this month's rows seed Calendar.
+  // Both are named for their span: swapping them would be invisible otherwise,
+  // since computeMonthStats only ever reads the displayed month's weekdays.
   const windowEntries: Entries = Object.fromEntries(
     rows.map((r) => [r.date, r.status])
   );
-  const entries: Entries = Object.fromEntries(
+  const monthEntries: Entries = Object.fromEntries(
     rows
       .filter((r) => r.date.startsWith(monthKey))
       .map((r) => [r.date, r.status])
@@ -226,9 +230,12 @@ export default async function Home({
       <Calendar
         key={monthKey}
         monthKey={monthKey}
-        initialEntries={entries}
+        initialEntries={monthEntries}
         targetPercent={targetPercent}
-        mandates={mandates}
+        // Nothing in the component asks about a day outside this month, so the
+        // window-wide list would only ship extra JSON — reason strings included,
+        // which never render there. aggregateMonths above still needs the wide one.
+        mandates={monthMandates}
         fyBaseline={fyBaseline}
       />
     </main>

@@ -10,24 +10,30 @@ import {
 // the financial year's running position underneath.
 export function Stats({
   stats,
-  fy,
+  fyStats,
 }: {
   stats: MonthStats;
-  fy: FyStats | null;
+  fyStats: FyStats | null;
 }) {
   return (
     <section aria-label="Progress" className="space-y-4">
-      <MonthBlock stats={stats} fy={fy} />
-      {fy && (
+      <MonthBlock stats={stats} fyStats={fyStats} />
+      {fyStats && (
         <div className="border-t border-rule pt-4">
-          <FyBlock fy={fy} monthStats={stats} />
+          <FyBlock fyStats={fyStats} monthStats={stats} />
         </div>
       )}
     </section>
   );
 }
 
-function MonthBlock({ stats, fy }: { stats: MonthStats; fy: FyStats | null }) {
+function MonthBlock({
+  stats,
+  fyStats,
+}: {
+  stats: MonthStats;
+  fyStats: FyStats | null;
+}) {
   const {
     eligibleDays,
     officeDays,
@@ -57,7 +63,7 @@ function MonthBlock({ stats, fy }: { stats: MonthStats; fy: FyStats | null }) {
 
   // A month shortfall the year has already banked for is not a shortfall, so it
   // loses the alarm colour. The FY line below is where the number to act on is.
-  const owedForYear = fy === null || fy.remainingNeeded > 0;
+  const owedForYear = fyStats === null || fyStats.remainingNeeded > 0;
 
   return (
     <div className="space-y-2">
@@ -105,13 +111,13 @@ function MonthBlock({ stats, fy }: { stats: MonthStats; fy: FyStats | null }) {
 }
 
 function FyBlock({
-  fy,
+  fyStats,
   monthStats,
 }: {
-  fy: FyStats;
+  fyStats: FyStats;
   monthStats: MonthStats;
 }) {
-  const { cumulativeOffice, cumulativeRequired, balance } = fy;
+  const { cumulativeOffice, cumulativeRequired, balance } = fyStats;
   // Full when nothing is required: an empty bar against a zero target would
   // read as no progress rather than no obligation.
   const fillPercent =
@@ -119,21 +125,20 @@ function FyBlock({
       ? 100
       : Math.min(100, Math.round((cumulativeOffice / cumulativeRequired) * 100));
 
+  // Its own landmark: this is a second subject inside "Progress", and the year
+  // is the one a screen reader has no other way to skip to.
   return (
-    <div className="space-y-2">
+    <section aria-label={`FY${fyStats.fy} progress`} className="space-y-2">
       <p className="font-mono text-[10px] tracking-widest text-fade uppercase">
-        FY{fy.fy} · {formatMonth(fy.fyStartMonth)} –{" "}
-        {formatMonth(fy.fyEndMonth)}
-        {fy.isPartialWindow && (
-          <> · counted from {formatMonth(fy.windowStartMonth)}</>
+        FY{fyStats.fy} · {formatMonth(fyStats.fyStartMonth)} –{" "}
+        {formatMonth(fyStats.fyEndMonth)}
+        {fyStats.isPartialWindow && (
+          <> · counted from {formatMonth(fyStats.windowStartMonth)}</>
         )}
       </p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* Carries nothing the text does not, exactly as the rings above. */}
-        <div
-          aria-hidden
-          className="h-2 w-40 border border-rule bg-transparent sm:w-56"
-        >
+        <div aria-hidden className="h-2 w-40 border border-rule sm:w-56">
           <div
             className="h-full bg-stamp"
             style={{ width: `${fillPercent}%` }}
@@ -141,11 +146,11 @@ function FyBlock({
         </div>
         <p className="font-mono text-sm">
           {cumulativeOffice}/{cumulativeRequired}{" "}
-          {fy.isFinalMonth ? "for the year" : "to date"}
+          {fyStats.isFinalMonth ? "for the year" : "to date"}
           {balance > 0 && <span className="text-stamp"> +{balance}</span>}
         </p>
       </div>
-      <p className="text-sm text-fade">{fyVerdict(fy, monthStats)}</p>
-    </div>
+      <p className="text-sm text-fade">{fyVerdict(fyStats, monthStats)}</p>
+    </section>
   );
 }
