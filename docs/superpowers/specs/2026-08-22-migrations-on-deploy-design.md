@@ -158,7 +158,7 @@ Alternatives rejected:
 a pure function.
 
 ```js
-const VERCEL_ENVIRONMENTS = new Set(["production", "preview", "development"]);
+const NON_MIGRATING_ENVIRONMENTS = new Set(["preview", "development"]);
 
 /** True when no Vercel environment is present at all — a laptop. */
 export function isLocal(env) {
@@ -176,7 +176,7 @@ export function shouldMigrate(env) {
   if (env.VERCEL_ENV === "production") {
     return { run: true, outcome: "production", reason: "Vercel production deploy" };
   }
-  if (VERCEL_ENVIRONMENTS.has(env.VERCEL_ENV)) {
+  if (NON_MIGRATING_ENVIRONMENTS.has(env.VERCEL_ENV)) {
     return { run: false, outcome: "skip", reason: `skipped — VERCEL_ENV=${env.VERCEL_ENV}` };
   }
   return {
@@ -348,16 +348,25 @@ precedence is load-bearing for the emergency path, so the implementation must no
 `scripts/should-migrate.test.mjs`, discovered by vitest's default include patterns and
 running in the existing `node` environment. No new dependencies.
 
-- `{}` — no Vercel variables at all → `run: true`, the laptop case
-- `{ VERCEL: "1", VERCEL_ENV: "production" }` → `run: true`
-- `{ VERCEL: "1", VERCEL_ENV: "preview" }` → `run: false` — the case that protects production
-- `{ VERCEL: "1", VERCEL_ENV: "development" }` → `run: false`
-- `{ VERCEL: "1" }` — on Vercel with `VERCEL_ENV` missing → `run: false`, the hardening
-- `{ VERCEL_ENV: "production" }` → `run: true`, covering a build env that sets only the one
-- `{ VERCEL_ENV: "" }` → `run: false`, proving the check is not truthiness
-- `{ VERCEL: "1", VERCEL_ENV: "Production" }` → `run: false`, proving it is not case-folded
-- the `reason` names the offending value on a skip, and says `(unset)` when there is none,
-  so a build log explains itself
+28 assertions in five groups.
+
+`isLocal`: absent, `VERCEL` alone, `VERCEL_ENV` alone, an empty `VERCEL_ENV`, and an
+*inherited* `VERCEL` — the last pinning the deliberate inherited-read semantics, which
+nothing else in the suite would catch.
+
+`run`: `{}` → true (laptop); `production` with and without `VERCEL` → true; `preview`,
+`development`, `{ VERCEL: "1" }` alone, `""`, and `"Production"` → false.
+
+`outcome`: `"local"`, `"production"`, `"skip"` for `preview` and `development`, and
+`"unknown"` for an absent, empty, wrong-case, or Vercel-undefined value such as `staging`.
+This group is what stops an unrecognized value being treated as a benign skip.
+
+Strictness: `" production"` and `"production\n"` are both refused as `"unknown"`, so a
+later `.trim()` cannot slip in unnoticed.
+
+`reason`: names the offending value on a skip, says `(unset)` when there is none, is
+non-empty on both allow paths, and — pinned explicitly — never mentions `.env.local`,
+since the emergency path supplies a production URL inline.
 
 This is a documented extension of the convention that only `src/lib/rto.ts` is
 unit-tested. The guard is not domain logic, but it is the only thing preventing a

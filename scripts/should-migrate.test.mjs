@@ -17,6 +17,10 @@ describe("isLocal", () => {
   it("is false for an empty VERCEL_ENV, which is present but blank", () => {
     expect(isLocal({ VERCEL_ENV: "" })).toBe(false);
   });
+
+  it("treats an inherited VERCEL as on-Vercel, erring toward refusing to migrate", () => {
+    expect(isLocal(Object.create({ VERCEL: "1" }))).toBe(false);
+  });
 });
 
 describe("shouldMigrate — whether it runs", () => {

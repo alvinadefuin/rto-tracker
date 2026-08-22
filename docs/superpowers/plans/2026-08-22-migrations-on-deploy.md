@@ -143,6 +143,10 @@ describe("isLocal", () => {
   it("is false for an empty VERCEL_ENV, which is present but blank", () => {
     expect(isLocal({ VERCEL_ENV: "" })).toBe(false);
   });
+
+  it("treats an inherited VERCEL as on-Vercel, erring toward refusing to migrate", () => {
+    expect(isLocal(Object.create({ VERCEL: "1" }))).toBe(false);
+  });
 });
 
 describe("shouldMigrate — whether it runs", () => {
@@ -267,11 +271,17 @@ Create `scripts/should-migrate.mjs`:
 
 ```js
 /**
- * The three values Vercel sets for VERCEL_ENV. Anything else, while on Vercel, is a state
- * this project does not understand — and guessing at it is how a deploy ends up shipping
- * code against an un-migrated schema.
+ * The Vercel environments that must not migrate. Named for the role rather than for
+ * Vercel's catalogue, and deliberately excluding "production" — that is what keeps the
+ * branch order in shouldMigrate from being load-bearing. Were "production" in this set,
+ * moving the `has` check above the production check would silently classify a real
+ * production deploy as a skip: exit 0, deploy green, never migrate.
+ *
+ * Anything on Vercel that is neither "production" nor in this set is a state this project
+ * does not understand, and guessing at it is how a deploy ships code against an
+ * un-migrated schema.
  */
-const VERCEL_ENVIRONMENTS = new Set(["production", "preview", "development"]);
+const NON_MIGRATING_ENVIRONMENTS = new Set(["preview", "development"]);
 
 /**
  * True when no Vercel environment is present at all — i.e. a laptop.
@@ -319,7 +329,7 @@ export function shouldMigrate(env) {
   if (env.VERCEL_ENV === "production") {
     return { run: true, outcome: "production", reason: "Vercel production deploy" };
   }
-  if (VERCEL_ENVIRONMENTS.has(env.VERCEL_ENV)) {
+  if (NON_MIGRATING_ENVIRONMENTS.has(env.VERCEL_ENV)) {
     return { run: false, outcome: "skip", reason: `skipped — VERCEL_ENV=${env.VERCEL_ENV}` };
   }
   return {
@@ -334,13 +344,13 @@ export function shouldMigrate(env) {
 
 Run: `npx vitest run scripts/should-migrate.test.mjs`
 
-Expected: `Tests  27 passed (27)`.
+Expected: `Tests  28 passed (28)`.
 
 - [ ] **Step 5: Confirm the whole suite is still green**
 
 Run: `npm test`
 
-Expected: `Test Files  2 passed (2)`, `Tests  106 passed (106)`.
+Expected: `Test Files  2 passed (2)`, `Tests  107 passed (107)`.
 
 - [ ] **Step 6: Commit**
 
@@ -375,7 +385,10 @@ console.log(`[migrate] ${decision.reason}`);
 // silent skip on a production deploy would ship code against an un-migrated schema —
 // the outage this whole mechanism replaces. Legitimate previews report "skip", not
 // "unknown", so nothing normal is affected.
-if (decision.outcome === "unknown") process.exit(1);
+if (decision.outcome === "unknown") {
+  console.error(`[migrate] ${decision.reason}`);
+  process.exit(1);
+}
 if (!decision.run) process.exit(0);
 
 // dotenv is a devDependency, so it must never be required on the deploy path. Only a
@@ -1128,7 +1141,7 @@ Expected: dev host, `[migrate] schema up to date`, exit `0`.
 npm test && npm run lint && npx next build
 ```
 
-Expected: `Tests  106 passed (106)`, eslint clean, build succeeds.
+Expected: `Tests  107 passed (107)`, eslint clean, build succeeds.
 
 - [ ] **Step 6: Confirm the tree is clean and scratch is untracked**
 
@@ -1163,7 +1176,7 @@ to force that proof earlier.
 
 ## Done when
 
-- `npm test` is green with the guard covered by 27 assertions.
+- `npm test` is green with the guard covered by 28 assertions.
 - `drizzle/` holds `0000` and its journal, committed.
 - Both Neon branches hold exactly one `drizzle.__drizzle_migrations` row with identical
   `hash` and `created_at`.

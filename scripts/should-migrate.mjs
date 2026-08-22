@@ -1,9 +1,15 @@
 /**
- * The three values Vercel sets for VERCEL_ENV. Anything else, while on Vercel, is a state
- * this project does not understand — and guessing at it is how a deploy ends up shipping
- * code against an un-migrated schema.
+ * The Vercel environments that must not migrate. Named for the role rather than for
+ * Vercel's catalogue, and deliberately excluding "production" — that is what keeps the
+ * branch order in shouldMigrate from being load-bearing. Were "production" in this set,
+ * moving the `has` check above the production check would silently classify a real
+ * production deploy as a skip: exit 0, deploy green, never migrate.
+ *
+ * Anything on Vercel that is neither "production" nor in this set is a state this project
+ * does not understand, and guessing at it is how a deploy ships code against an
+ * un-migrated schema.
  */
-const VERCEL_ENVIRONMENTS = new Set(["production", "preview", "development"]);
+const NON_MIGRATING_ENVIRONMENTS = new Set(["preview", "development"]);
 
 /**
  * True when no Vercel environment is present at all — i.e. a laptop.
@@ -51,7 +57,7 @@ export function shouldMigrate(env) {
   if (env.VERCEL_ENV === "production") {
     return { run: true, outcome: "production", reason: "Vercel production deploy" };
   }
-  if (VERCEL_ENVIRONMENTS.has(env.VERCEL_ENV)) {
+  if (NON_MIGRATING_ENVIRONMENTS.has(env.VERCEL_ENV)) {
     return { run: false, outcome: "skip", reason: `skipped — VERCEL_ENV=${env.VERCEL_ENV}` };
   }
   return {
