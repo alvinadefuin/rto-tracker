@@ -8,6 +8,13 @@
       "when": 1787365513752,
       "tag": "0000_friendly_firedrake",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787719172221,
+      "tag": "0001_lucky_slipstream",
+      "breakpoints": true
     }
   ]
 }

@@ -99,6 +99,7 @@ export const dayEntries = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     date: text("date").notNull(), // YYYY-MM-DD; text avoids TZ drift
     status: dayStatusEnum("status").notNull(),
+    note: text("note"), // optional human note; never parsed
   },
   (t) => [primaryKey({ columns: [t.userId, t.date] })]
 );
