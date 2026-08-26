@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatImportSummary,
+  isNationwideHoliday,
   parseHolidayIcs,
   planHolidayImport,
   type ImportedHoliday,
@@ -378,5 +379,92 @@ describe("formatImportSummary", () => {
         beforeRecord: 0,
       })
     ).toBe("0 marked · 18 already marked");
+  });
+});
+
+// Every distinct name the live feed uses across 2021–2031, after stripping a
+// trailing "(tentative)". Checked as one table so the classification is
+// reviewable in one place, and so adding a name to the allowlist without
+// deciding this list's verdict is impossible.
+const KEPT_NAMES = [
+  // Regular holidays (RA 9849), nationwide
+  "New Year's Day",
+  "The Day of Valor",
+  "Maundy Thursday",
+  "Good Friday",
+  "Labor Day",
+  "Independence Day",
+  "National Heroes Day",
+  "Bonifacio Day",
+  "Christmas Day",
+  "Rizal Day",
+  "Eid al-Fitr",
+  "Eid al-Adha",
+  // Special non-working days, nationwide
+  "Ninoy Aquino Day",
+  "All Saints' Day",
+  "All Souls' Day",
+  "Feast of the Immaculate Conception",
+  "Christmas Eve",
+  "New Year's Eve",
+  "Black Saturday",
+  "Lunar New Year's Day",
+  "Special Day after Christmas",
+  "Special non-working day after New Year",
+  "National Elections",
+  // Substitute and additional proclaimed days
+  "Day off for Bonifacio Day",
+  "Day off for People Power Anniversary",
+  "Ninoy Aquino Day Holiday",
+  "Lunar New Year Holiday",
+];
+
+const DROPPED_NAMES = [
+  // Non-working in BARMM only
+  "Maulid un-Nabi",
+  "Lailatul Isra Wal Mi Raj",
+  "Amun Jadid",
+  "Eid al-Fitr Holiday",
+  "Eid al-Adha Holiday",
+  // Special *working* days, or too variable year to year to assume
+  "Reformation Day",
+  "People Power Anniversary",
+  "Founding Anniversary of Iglesia ni Cristo",
+];
+
+describe("isNationwideHoliday", () => {
+  it("covers all 35 names the feed uses", () => {
+    expect(KEPT_NAMES.length + DROPPED_NAMES.length).toBe(35);
+  });
+
+  it.each(KEPT_NAMES)("keeps %s", (name) => {
+    expect(isNationwideHoliday(name)).toBe(true);
+  });
+
+  it.each(DROPPED_NAMES)("drops %s", (name) => {
+    expect(isNationwideHoliday(name)).toBe(false);
+  });
+
+  it("strips a trailing (tentative) before matching", () => {
+    expect(isNationwideHoliday("Eid al-Fitr (tentative)")).toBe(true);
+  });
+
+  it("drops a tentative regional holiday too", () => {
+    expect(isNationwideHoliday("Eid al-Adha Holiday (tentative)")).toBe(false);
+  });
+
+  it("tolerates surrounding whitespace", () => {
+    expect(isNationwideHoliday("  Rizal Day  ")).toBe(true);
+  });
+
+  // The deliberate failure direction: an unknown name is dropped, which leaves
+  // the day eligible and the requirement higher. A denylist would mark it and
+  // quietly lower the requirement instead.
+  it("drops a name it has never seen", () => {
+    expect(isNationwideHoliday("Founding Day of Something New")).toBe(false);
+  });
+
+  it("does not match a partial name", () => {
+    expect(isNationwideHoliday("Christmas")).toBe(false);
   });
 });

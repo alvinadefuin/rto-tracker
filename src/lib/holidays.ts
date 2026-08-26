@@ -175,3 +175,77 @@ export function formatImportSummary(plan: ImportPlan): string {
   }
   return parts.join(" · ");
 }
+
+/**
+ * Holidays that are non-working nationwide, by the name the feed gives them.
+ *
+ * An allowlist, not a denylist on the regional names, for the same reason the
+ * DESCRIPTION check is one: **the two directions fail differently.** An
+ * unrecognised name is dropped, which leaves the day eligible and the
+ * requirement *higher* — the user works a day they may not have needed to, and
+ * fixes it with a tap. A denylist that missed a new regional holiday would mark
+ * it and silently *lower* the requirement, and nothing would ever surface that.
+ *
+ * The accepted cost: a genuinely new nationwide holiday is dropped until
+ * someone adds it here. No test can catch that, because the tests have no feed.
+ *
+ * Excluded on purpose, and checked against the live feed's own dates:
+ *
+ * - **Maulid un-Nabi, Lailatul Isra Wal Mi Raj, Amun Jadid** — non-working in
+ *   BARMM, not nationwide. This is the case that prompted the list.
+ * - **`Eid al-Fitr Holiday` / `Eid al-Adha Holiday`** — a *second* day, not a
+ *   weekend substitute: each falls the day after its Eid whatever the weekday
+ *   (Tue→Wed 2021, Mon→Tue 2024, Fri→Sat 2025, Mon→Tue 2027). `Day off for X`
+ *   below is the genuine moved observance, which is why the two are treated
+ *   differently despite looking alike.
+ * - **People Power Anniversary** — a special *working* day in most years. 2023
+ *   carries both it and a separate `Day off for People Power Anniversary`,
+ *   which is the tell: when the day is really non-working the feed says so.
+ * - **Reformation Day** — flips between working and non-working year to year.
+ * - **Founding Anniversary of Iglesia ni Cristo** — a special working day.
+ */
+const NATIONWIDE_HOLIDAYS = new Set([
+  // Regular holidays (RA 9849)
+  "New Year's Day",
+  "The Day of Valor",
+  "Maundy Thursday",
+  "Good Friday",
+  "Labor Day",
+  "Independence Day",
+  "National Heroes Day",
+  "Bonifacio Day",
+  "Christmas Day",
+  "Rizal Day",
+  "Eid al-Fitr",
+  "Eid al-Adha",
+  // Special non-working days
+  "Ninoy Aquino Day",
+  "All Saints' Day",
+  "All Souls' Day",
+  "Feast of the Immaculate Conception",
+  "Christmas Eve",
+  "New Year's Eve",
+  "Black Saturday",
+  "Lunar New Year's Day",
+  "Special Day after Christmas",
+  "Special non-working day after New Year",
+  "National Elections",
+  // Substitute and additional proclaimed days
+  "Day off for Bonifacio Day",
+  "Day off for People Power Anniversary",
+  "Ninoy Aquino Day Holiday",
+  "Lunar New Year Holiday",
+]);
+
+/**
+ * Whether a feed holiday is non-working nationwide.
+ *
+ * The `(tentative)` suffix Google appends to unconfirmed Islamic dates is
+ * stripped first: it qualifies the date, not the holiday, so
+ * "Eid al-Fitr (tentative)" must classify exactly as "Eid al-Fitr" does.
+ */
+export function isNationwideHoliday(name: string): boolean {
+  return NATIONWIDE_HOLIDAYS.has(
+    name.replace(/\s*\(tentative\)\s*$/, "").trim()
+  );
+}
