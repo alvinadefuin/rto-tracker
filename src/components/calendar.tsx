@@ -16,13 +16,20 @@ import {
 import { Stats } from "@/components/stats";
 import { Toast } from "@/components/toast";
 
-const CYCLE: (DayStatus | null)[] = [null, "office", "leave", "holiday"];
+const CYCLE: (DayStatus | null)[] = [
+  null,
+  "office",
+  "leave",
+  "holiday",
+  "training",
+];
 
 const STATUS_LABEL: Record<DayStatus | "wfh", string> = {
   wfh: "Work from home",
   office: "Office",
   leave: "Leave",
   holiday: "Holiday",
+  training: "Training",
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -40,6 +47,14 @@ function monthGrid(year: number, month: number): (string | null)[][] {
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
   return weeks;
 }
+
+// Every non-office status needs a colour; a ternary here would quietly paint a
+// new status in the last branch's colour.
+const STATUS_CLASS: Record<Exclude<DayStatus, "office">, string> = {
+  leave: "text-leave",
+  holiday: "text-holiday",
+  training: "text-training",
+};
 
 function DayMark({
   status,
@@ -65,7 +80,7 @@ function DayMark({
   return (
     <span
       className={`font-mono text-[10px] font-medium tracking-widest uppercase ${
-        status === "leave" ? "text-leave" : "text-holiday"
+        STATUS_CLASS[status]
       } ${mutedClass}`}
     >
       {status}
@@ -123,10 +138,10 @@ export function Calendar({
 
   // Every holiday the month has, annotated only where the day is *still
   // eligible* — that is, where the listed holiday is not actually excluding it.
-  // `isEligible` excludes a day when it is mandated or its status is `leave` or
-  // `holiday`, so a leave day needs no annotation: it is already out of the
-  // pool, and saying "you marked leave" would imply it counts. Computed from
-  // live `entries`, so a tap updates the annotation on the same tap.
+  // The statuses that exclude a day are ELIGIBLE_BY_STATUS's business, not this
+  // list's: whatever they are, such a day needs no annotation, because it is
+  // already out of the pool and saying "you marked leave" would imply it counts.
+  // Computed from live `entries`, so a tap updates the annotation on the same tap.
   const monthHolidays = [...holidays]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(({ date, name }) => {
@@ -319,9 +334,9 @@ export function Calendar({
       )}
 
       <p className="text-xs text-fade">
-        Tap a weekday to cycle: work from home → office → leave → holiday.
-        Untouched days count as work from home. Hatched days are mandated work
-        from home — they don&apos;t count toward the requirement.
+        Tap a weekday to cycle: work from home → office → leave → holiday →
+        training. Untouched days count as work from home. Hatched days are
+        mandated work from home — they don&apos;t count toward the requirement.
       </p>
 
       {toast && <Toast message={toast} />}

@@ -1,13 +1,16 @@
 import {
   DEFAULT_RTO_PERCENT,
+  formatDays,
   formatMonth,
   fyVerdict,
+  monthMeter,
   type FyStats,
   type MonthStats,
 } from "@/lib/rto";
 
-// Stamp-card meter — one ring per required office day, filled as stamped — with
-// the financial year's running position underneath.
+// Stamp-card meter — one ring per required office day, rounded up, filled as
+// stamped; a fractional requirement leaves its last ring drawn short until a
+// stamp fills it — with the financial year's running position underneath.
 export function Stats({
   stats,
   fyStats,
@@ -37,14 +40,15 @@ function MonthBlock({
   const {
     eligibleDays,
     officeDays,
-    requiredDays,
-    remainingNeeded,
+    requiredPoints,
+    remainingPoints,
     targetPercent,
     achievedPercent,
     mandatedDays,
   } = stats;
-  const filled = Math.min(officeDays, requiredDays);
-  const extra = officeDays - filled;
+  // Derived in src/lib/rto.ts, where Vitest can assert it — not inline here,
+  // where it could not be. That file carries the reasoning behind each number.
+  const { slots, partialSlot, filled, extra } = monthMeter(stats);
 
   // Nothing was owed this month. Rendering zero rings and "0/0 stamped ·
   // target met · 0%" would read as a bug, so say why instead.
@@ -71,25 +75,40 @@ function MonthBlock({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-1.5" aria-hidden>
-          {Array.from({ length: requiredDays }, (_, i) => (
-            <span
-              key={i}
-              className={`inline-block size-4 rounded-full border-2 ${
-                i < filled
-                  ? "border-stamp bg-stamp"
-                  : "border-fade/60 bg-transparent"
-              }`}
-            />
-          ))}
+          {Array.from({ length: slots }, (_, i) => {
+            const stamped = i < filled;
+            // The final slot can be worth less than a whole day. Show how much
+            // rather than drawing a full ring the month never has to fill.
+            // Drawn in fade, not stamp: this is the size of the obligation, not
+            // progress against it — and it disappears once a stamp lands on it.
+            const partial = !stamped && partialSlot > 0 && i === slots - 1;
+            return (
+              <span
+                key={i}
+                className={`inline-block size-4 rounded-full border-2 ${
+                  stamped
+                    ? "border-stamp bg-stamp"
+                    : "border-fade/60 bg-transparent"
+                }`}
+                style={
+                  partial
+                    ? {
+                        background: `conic-gradient(var(--color-fade) ${partialSlot}%, transparent 0)`,
+                      }
+                    : undefined
+                }
+              />
+            );
+          })}
           {extra > 0 && (
             <span className="font-mono text-xs text-stamp">+{extra}</span>
           )}
         </div>
         <p className="font-mono text-sm">
-          {officeDays}/{requiredDays} stamped ·{" "}
-          {remainingNeeded > 0 ? (
+          {officeDays}/{formatDays(requiredPoints)} stamped ·{" "}
+          {remainingPoints > 0 ? (
             <span className={owedForYear ? "text-stamp" : "text-fade"}>
-              {remainingNeeded} to go
+              {formatDays(remainingPoints)} to go
             </span>
           ) : (
             // The mirror of the line above, and the more dangerous misread of
@@ -103,8 +122,8 @@ function MonthBlock({
         </p>
       </div>
       <p className="text-sm text-fade">
-        {requiredDays} office days required — {targetPercent}% of {eligibleDays}{" "}
-        eligible working days this month
+        {formatDays(requiredPoints)} office days required — {targetPercent}% of{" "}
+        {eligibleDays} eligible working days this month
         {targetPercent !== DEFAULT_RTO_PERCENT && (
           <span className="text-stamp">
             {" "}

@@ -8,7 +8,7 @@ import { requireUserId } from "@/lib/require-user";
 import { isWeekend, type DayStatus } from "@/lib/rto";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const STATUSES: DayStatus[] = ["office", "leave", "holiday"];
+const STATUSES: DayStatus[] = ["office", "leave", "holiday", "training"];
 
 export async function setDayStatus(date: string, status: DayStatus | null) {
   const userId = await requireUserId();

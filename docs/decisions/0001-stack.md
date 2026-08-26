@@ -22,3 +22,6 @@ sign-in.
    table small and makes the default state impossible to get wrong.
 5. **40% target rounds up** (`ceil`): 22 eligible days → 9 required, since 8
    days would be 36%, below the requirement.
+   **Superseded by ADR 0006** (2026-08-26): the employer states the month
+   un-rounded, so the month now carries its fraction and only the financial
+   year rounds.

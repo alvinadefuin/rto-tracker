@@ -1,6 +1,6 @@
 {
-  "id": "baafbc1d-d723-455c-942c-d0003ccabdec",
-  "prevId": "2d8e89c1-f277-4e38-8b38-dcec3ba523b1",
+  "id": "5500b118-4010-45f7-af35-0608fb987177",
+  "prevId": "7c1fd4dc-e61f-4e30-a3f3-b6810f5d33d6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -582,7 +582,8 @@
       "values": [
         "office",
         "leave",
-        "holiday"
+        "holiday",
+        "training"
       ]
     }
   },

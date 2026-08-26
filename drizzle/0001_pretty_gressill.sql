@@ -1,0 +1,1 @@
+ALTER TYPE "public"."day_status" ADD VALUE IF NOT EXISTS 'training';

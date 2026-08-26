@@ -1,5 +1,5 @@
 {
-  "id": "2d8e89c1-f277-4e38-8b38-dcec3ba523b1",
+  "id": "7c1fd4dc-e61f-4e30-a3f3-b6810f5d33d6",
   "prevId": "7d471c6b-9ebc-47e8-a573-5e5d675faceb",
   "version": "7",
   "dialect": "postgresql",
@@ -218,12 +218,6 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -557,7 +551,8 @@
       "values": [
         "office",
         "leave",
-        "holiday"
+        "holiday",
+        "training"
       ]
     }
   },

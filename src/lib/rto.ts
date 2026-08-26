@@ -1,4 +1,4 @@
-export type DayStatus = "office" | "leave" | "holiday";
+export type DayStatus = "office" | "leave" | "holiday" | "training";
 export type Entries = Record<string, DayStatus>; // key: 'YYYY-MM-DD'
 
 export interface WeekStats {
@@ -9,10 +9,23 @@ export interface WeekStats {
 }
 
 export interface MonthStats {
-  eligibleDays: number; // weekdays − mandated − holidays − leaves
+  eligibleDays: number; // weekdays − mandated − holidays − leaves − training
   officeDays: number;
-  requiredDays: number; // ceil(eligibleDays * targetPercent / 100)
-  remainingNeeded: number; // max(0, requiredDays − officeDays)
+  /**
+   * eligibleDays × targetPercent, in integer percent-points and deliberately
+   * un-rounded. A point is a hundredth of an office day, so 13 eligible at 40%
+   * is 520 points — 5.2 days. Points rather than days because `5.2 - 5` is
+   * `0.20000000000000018`, which makes a float unreliable at exactly the
+   * boundary the target-met test exists to detect. `formatDays` is the only
+   * way one of these becomes a rendered string.
+   */
+  requiredPoints: number;
+  /**
+   * max(0, requiredPoints − officeDays × 100). Exact, so `=== 0` *is* the
+   * target-met test. The month never rounds; the year rounds up once, in
+   * computeFyStats.
+   */
+  remainingPoints: number;
   targetPercent: number; // whole percent required this month, e.g. 20
   achievedPercent: number; // whole percent achieved, 0 when eligibleDays === 0
   mandatedDays: number; // mandated weekdays in the month, excluded from eligible
@@ -261,6 +274,25 @@ export function formatMandateRange(mandate: WfhMandate): string {
   return `${formatDate(mandate.startDate)} – ${end}`;
 }
 
+/**
+ * Percent-points as a readable day count: 520 → "5.2", 800 → "8", 429 → "4.29".
+ *
+ * Takes points rather than a fractional day deliberately. `targetPercent` and
+ * `eligibleDays` are both whole, so points/100 is exact to two decimals — no
+ * float is ever formatted, the one division is truncated on the spot, and no
+ * rounding decision is hidden in here.
+ *
+ * `points` is a non-negative integer: both factors are whole, and shortfalls are
+ * clamped at zero before they reach here. Negative or fractional input produces
+ * a malformed string rather than throwing.
+ */
+export function formatDays(points: number): string {
+  const whole = Math.trunc(points / 100);
+  const frac = points % 100;
+  if (frac === 0) return String(whole);
+  return `${whole}.${String(frac).padStart(2, "0").replace(/0$/, "")}`;
+}
+
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 /**
@@ -319,9 +351,23 @@ export function monthWeekdays(year: number, month: number): string[] {
 }
 
 /**
+ * Whether each status leaves a weekday in the eligible base. A total Record
+ * rather than a list of exclusions: a fifth `DayStatus` fails to compile here,
+ * where an array — like the chain of `!==` this replaced — would accept it and
+ * silently treat it as eligible.
+ */
+const ELIGIBLE_BY_STATUS: Record<DayStatus, boolean> = {
+  office: true,
+  leave: false,
+  holiday: false,
+  training: false,
+};
+
+/**
  * True when a **weekday** counts toward the requirement. Callers filter
  * weekends first. A mandate wins over any recorded status — the exclusion is a
- * property of the mandate, not of what the user tapped.
+ * property of the mandate, not of what the user tapped. Every other exclusion
+ * is ELIGIBLE_BY_STATUS above; an unrecorded weekday is WFH, and stays eligible.
  *
  * This is the single definition of the eligible-day rule; computeMonthStats and
  * the calendar's per-week badge both defer to it.
@@ -333,7 +379,7 @@ export function isEligible(
 ): boolean {
   if (isMandated(date, mandates)) return false;
   const status = entries[date];
-  return status !== "leave" && status !== "holiday";
+  return status === undefined || ELIGIBLE_BY_STATUS[status];
 }
 
 export function computeMonthStats(
@@ -374,12 +420,16 @@ export function computeMonthStats(
     }
   }
 
-  const requiredDays = Math.ceil((eligibleDays * targetPercent) / 100);
+  // Percent-points, un-rounded: the employer computes 13 × 40% as 5.2 days, not
+  // 6. The financial year is where the fraction is finally settled, with a
+  // single Math.ceil in computeFyStats — never one per month.
+  const requiredPoints = eligibleDays * targetPercent;
+  const remainingPoints = Math.max(0, requiredPoints - officeDays * 100);
   return {
     eligibleDays,
     officeDays,
-    requiredDays,
-    remainingNeeded: Math.max(0, requiredDays - officeDays),
+    requiredPoints,
+    remainingPoints,
     targetPercent,
     achievedPercent:
       eligibleDays === 0 ? 0 : Math.round((officeDays / eligibleDays) * 100),
@@ -388,10 +438,47 @@ export function computeMonthStats(
   };
 }
 
+/** The four numbers the month's stamp-card meter is drawn from. */
+export interface MonthMeter {
+  slots: number; // whole rings; the requirement rounded up
+  partialSlot: number; // 0..99 — the last ring's worth, 0 when the requirement is whole
+  filled: number; // rings stamped
+  extra: number; // whole rings of surplus past the row
+}
+
+/**
+ * Ring counts for a month's stamp card.
+ *
+ * Lives here rather than in the component that draws it because Vitest runs
+ * without a DOM: arithmetic inside JSX cannot be asserted, so it would ship
+ * untested — the same reason fyVerdict's copy is in this file.
+ *
+ * Slots are whole rings: a requirement of 5.2 needs six, the last worth 0.2.
+ * Both come off `requiredPoints`, never the fractional sibling —
+ * Array.from({ length: 5.2 }) silently yields five rings, and (5.2 % 1) * 100
+ * is 20.000000000000018, which would go straight into the ring's gradient as a
+ * rendered string.
+ *
+ * `extra` counts whole rings past the row, not the exact surplus. Since
+ * `slots` rounds the requirement up, that can never overstate what the year
+ * will grant: a month over-served by 1.8 days reports +1, and the year settles
+ * the rest. Do not "fix" it into formatDays(officeDays * 100 − requiredPoints).
+ */
+export function monthMeter(stats: MonthStats): MonthMeter {
+  const { requiredPoints, officeDays } = stats;
+  const slots = Math.ceil(requiredPoints / 100);
+  return {
+    slots,
+    partialSlot: requiredPoints % 100,
+    filled: Math.min(officeDays, slots),
+    extra: Math.max(0, officeDays - slots),
+  };
+}
+
 export interface MonthsAggregate {
   officeDays: number;
   /**
-   * Σ (eligibleDays × targetPercent) across the months, in percent-points and
+   * Σ of each month's `requiredPoints` across the months, in percent-points and
    * deliberately **un-rounded**. Dividing by 100 exactly once, at the end, in
    * computeFyStats is the whole point: it is what makes a 260-weekday year at
    * 40% owe 104 days rather than the ~110 that twelve monthly round-ups cost.
@@ -421,7 +508,7 @@ export function aggregateMonths(
     const percent = resolvePercent(monthKey, periods);
     const stats = computeMonthStats(year, month, entries, percent, mandates);
     officeDays += stats.officeDays;
-    weightedEligible += stats.eligibleDays * percent;
+    weightedEligible += stats.requiredPoints;
   }
   return { officeDays, weightedEligible };
 }
@@ -499,9 +586,7 @@ export function computeFyStats(
     financialYearBounds(fy);
 
   const cumulativeOffice = baseline.prior.officeDays + monthStats.officeDays;
-  const weighted =
-    baseline.prior.weightedEligible +
-    monthStats.eligibleDays * monthStats.targetPercent;
+  const weighted = baseline.prior.weightedEligible + monthStats.requiredPoints;
   const cumulativeRequired = Math.ceil(weighted / 100);
   const balance = cumulativeOffice - cumulativeRequired;
   return {
@@ -524,10 +609,11 @@ const plural = (n: number, one: string, many: string) =>
 /**
  * The one sentence saying what the financial year still owes.
  *
- * Takes the whole `MonthStats` rather than its `remainingNeeded` number: the
- * month's shortfall and the year's are different quantities, and passing
- * `fy.remainingNeeded` by mistake would type-check while producing a plausible
- * wrong sentence. `FyStats` is not assignable to `MonthStats`, so it cannot.
+ * Takes the whole `MonthStats` rather than its `remainingPoints` number: the
+ * month's shortfall and the year's are different quantities in different units,
+ * and a bare-number parameter would take `fy.remainingNeeded` — whole days —
+ * without complaint and print a plausible wrong sentence. `FyStats` is not
+ * assignable to `MonthStats`, so it cannot.
  *
  * Copy lives here rather than in the component because Vitest runs without a
  * DOM: eight branches are worth asserting, and in JSX they could not be.
@@ -554,13 +640,17 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     // month's whole requirement: a non-negative balance means the month's
     // remaining days are paid for. Do not "fix" the apparent contradiction of
     // "1 day ahead" next to "9 remaining days are covered".
-    if (monthStats.remainingNeeded > 0) {
-      const remaining = plural(
-        monthStats.remainingNeeded,
-        "remaining day is",
-        "remaining days are"
-      );
-      return `${ahead} — this month's ${remaining} covered.`;
+    //
+    // Points, not the fractional day: the month's shortfall can be 0.2, so
+    // both the comparison and the number formatting have to be exact.
+    if (monthStats.remainingPoints > 0) {
+      const noun =
+        monthStats.remainingPoints === 100
+          ? "remaining day is"
+          : "remaining days are";
+      return `${ahead} — this month's ${formatDays(
+        monthStats.remainingPoints
+      )} ${noun} covered.`;
     }
     return `${ahead} — banked toward later months.`;
   }

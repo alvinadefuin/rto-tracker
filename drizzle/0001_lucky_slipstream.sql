@@ -1,1 +1,0 @@
-ALTER TABLE "day_entries" ADD COLUMN "note" text;

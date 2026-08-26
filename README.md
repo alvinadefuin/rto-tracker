@@ -2,8 +2,8 @@
 
 Personal return-to-office attendance record. Stamp the weekdays you were in the
 office; the app tracks whether you're meeting the 40% monthly requirement.
-Unmarked weekdays count as work from home; leaves, holidays, and mandated
-work-from-home periods are excluded from the computation.
+Unmarked weekdays count as work from home; leaves, holidays, training days,
+and mandated work-from-home periods are excluded from the computation.
 
 Stack: Next.js (App Router) · Drizzle ORM · Neon Postgres · Auth.js v5
 (Google OAuth). See `docs/architecture.md` and `docs/decisions/` for design
