@@ -11,8 +11,16 @@ export interface WeekStats {
 export interface MonthStats {
   eligibleDays: number; // weekdays − mandated − holidays − leaves
   officeDays: number;
-  requiredDays: number; // ceil(eligibleDays * targetPercent / 100)
-  remainingNeeded: number; // max(0, requiredDays − officeDays)
+  /**
+   * eligibleDays × targetPercent, in integer percent-points and deliberately
+   * un-rounded. Authoritative: every comparison and every rendered string
+   * derives from this, not from the fractional sibling below.
+   */
+  requiredPoints: number;
+  requiredDays: number; // requiredPoints / 100 — the readable figure, e.g. 5.2
+  /** max(0, requiredPoints − officeDays × 100). Exact; 0 means the month is met. */
+  remainingPoints: number;
+  remainingNeeded: number; // remainingPoints / 100
   targetPercent: number; // whole percent required this month, e.g. 20
   achievedPercent: number; // whole percent achieved, 0 when eligibleDays === 0
   mandatedDays: number; // mandated weekdays in the month, excluded from eligible
@@ -377,12 +385,18 @@ export function computeMonthStats(
     }
   }
 
-  const requiredDays = Math.ceil((eligibleDays * targetPercent) / 100);
+  // Percent-points, un-rounded: the employer computes 13 × 40% as 5.2 days, not
+  // 6. The financial year is where the fraction is finally settled, with a
+  // single Math.ceil in computeFyStats — never one per month.
+  const requiredPoints = eligibleDays * targetPercent;
+  const remainingPoints = Math.max(0, requiredPoints - officeDays * 100);
   return {
     eligibleDays,
     officeDays,
-    requiredDays,
-    remainingNeeded: Math.max(0, requiredDays - officeDays),
+    requiredPoints,
+    requiredDays: requiredPoints / 100,
+    remainingPoints,
+    remainingNeeded: remainingPoints / 100,
     targetPercent,
     achievedPercent:
       eligibleDays === 0 ? 0 : Math.round((officeDays / eligibleDays) * 100),
