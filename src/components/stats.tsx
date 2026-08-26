@@ -7,9 +7,9 @@ import {
   type MonthStats,
 } from "@/lib/rto";
 
-// Stamp-card meter — one ring per required office day, filled as stamped, the
-// last part-filled when the requirement is fractional — with the financial
-// year's running position underneath.
+// Stamp-card meter — one ring per required office day, rounded up, filled as
+// stamped; a fractional requirement leaves its last ring drawn short until a
+// stamp fills it — with the financial year's running position underneath.
 export function Stats({
   stats,
   fyStats,
@@ -46,11 +46,16 @@ function MonthBlock({
     mandatedDays,
   } = stats;
   // Slots are whole rings: a requirement of 5.2 needs six, the last worth 0.2.
-  // Counted from points so the number of rings never depends on binary
-  // rounding — Array.from({length: 5.2}) silently yields five.
+  // Both come off the integer, never the float sibling — Array.from({length:
+  // 5.2}) silently yields five rings, and (5.2 % 1) * 100 is
+  // 20.000000000000018, which would go straight into the gradient below as a
+  // rendered string.
   const slots = Math.ceil(requiredPoints / 100);
   const partialSlot = requiredPoints % 100; // 0 when the requirement is whole
   const filled = Math.min(officeDays, slots);
+  // Whole rings past the row, not the exact surplus: this is the same figure
+  // computeFyStats calls balance, so the month's +N and the year's +N never
+  // disagree. Do not "fix" it into formatDays(officeDays * 100 - requiredPoints).
   const extra = Math.max(0, officeDays - slots);
 
   // Nothing was owed this month. Rendering zero rings and "0/0 stamped ·
@@ -79,31 +84,27 @@ function MonthBlock({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-1.5" aria-hidden>
           {Array.from({ length: slots }, (_, i) => {
-            if (i < filled) {
-              return (
-                <span
-                  key={i}
-                  className="inline-block size-4 rounded-full border-2 border-stamp bg-stamp"
-                />
-              );
-            }
+            const stamped = i < filled;
             // The final slot can be worth less than a whole day. Show how much
             // rather than drawing a full ring the month never has to fill.
-            if (partialSlot > 0 && i === slots - 1) {
-              return (
-                <span
-                  key={i}
-                  className="inline-block size-4 rounded-full border-2 border-fade/60"
-                  style={{
-                    background: `conic-gradient(var(--color-fade) ${partialSlot}%, transparent 0)`,
-                  }}
-                />
-              );
-            }
+            // Drawn in fade, not stamp: this is the size of the obligation, not
+            // progress against it — and it disappears once a stamp lands on it.
+            const partial = !stamped && partialSlot > 0 && i === slots - 1;
             return (
               <span
                 key={i}
-                className="inline-block size-4 rounded-full border-2 border-fade/60 bg-transparent"
+                className={`inline-block size-4 rounded-full border-2 ${
+                  stamped
+                    ? "border-stamp bg-stamp"
+                    : "border-fade/60 bg-transparent"
+                }`}
+                style={
+                  partial
+                    ? {
+                        background: `conic-gradient(var(--color-fade) ${partialSlot}%, transparent 0)`,
+                      }
+                    : undefined
+                }
               />
             );
           })}
