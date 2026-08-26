@@ -4,13 +4,16 @@ import { desc, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { rtoTargets, wfhMandates } from "@/db/schema";
-import { DEFAULT_RTO_PERCENT } from "@/lib/rto";
+import { DEFAULT_RTO_PERCENT, financialYearOf } from "@/lib/rto";
+import { currentMonthKey } from "@/lib/clock";
 import { addTargetPeriod } from "@/app/settings-actions";
 import { addWfhMandate } from "@/app/mandate-actions";
+import { importHolidays } from "@/app/holiday-actions";
 import { PeriodForm } from "@/components/period-form";
 import { PeriodRow } from "@/components/period-row";
 import { MandateForm } from "@/components/mandate-form";
 import { MandateRow } from "@/components/mandate-row";
+import { ImportHolidaysForm } from "@/components/import-holidays-form";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -27,6 +30,13 @@ export default async function SettingsPage() {
     .from(wfhMandates)
     .where(eq(wfhMandates.userId, session.user.id))
     .orderBy(desc(wfhMandates.startDate));
+
+  // The current FY plus the four before and one after. Derived on the server so
+  // the option list is identical in SSR and hydration; the clock read means a
+  // render within a day of 1 August can preselect the neighbouring FY, which is
+  // a dropdown default the user can change and feeds no arithmetic.
+  const currentFy = financialYearOf(currentMonthKey());
+  const financialYears = [-4, -3, -2, -1, 0, 1].map((offset) => currentFy + offset);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
@@ -130,6 +140,30 @@ export default async function SettingsPage() {
             Add a mandate
           </p>
           <MandateForm action={addWfhMandate} submitLabel="Add mandate" />
+        </div>
+
+        <div className="border-t border-rule pt-6">
+          <p className="font-mono text-[11px] font-medium tracking-[0.2em] text-fade uppercase">
+            Philippine holidays
+          </p>
+          <p className="mt-2 text-sm text-fade">
+            Fetches the Philippine public holiday list and marks those weekdays
+            as holidays, which removes them from your eligible days. Days you
+            have already marked are left alone, and nothing is written before
+            your record starts. Safe to run again — it only fills in what is
+            missing.
+          </p>
+        </div>
+
+        <div className="border border-rule bg-white/40 p-4">
+          <p className="mb-3 font-mono text-[10px] tracking-widest text-fade uppercase">
+            Import a year
+          </p>
+          <ImportHolidaysForm
+            action={importHolidays}
+            financialYears={financialYears}
+            defaultFy={currentFy}
+          />
         </div>
       </section>
     </main>

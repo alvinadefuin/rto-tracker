@@ -18,6 +18,7 @@ import {
   type Entries,
   type FyBaseline,
 } from "@/lib/rto";
+import { currentMonthKey } from "@/lib/clock";
 import { Calendar } from "@/components/calendar";
 
 const MONTH_NAMES = [
@@ -34,13 +35,6 @@ const MONTH_NAMES = [
   "November",
   "December",
 ];
-
-const pad = (n: number) => String(n).padStart(2, "0");
-
-function currentMonthKey(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-}
 
 export default async function Home({
   searchParams,
