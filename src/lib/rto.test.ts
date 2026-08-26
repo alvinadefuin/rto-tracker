@@ -1287,6 +1287,13 @@ describe("formatDays", () => {
     expect(formatDays(440)).toBe("4.4");
     expect(formatDays(404)).toBe("4.04");
   });
+
+  // FY-scale callers pass four-digit points, so the whole part is not always
+  // one digit. Catches any implementation that slices at a fixed width.
+  it("renders a multi-digit whole part", () => {
+    expect(formatDays(1005)).toBe("10.05");
+    expect(formatDays(2600)).toBe("26");
+  });
 });
 
 // The employer's own worked example, from the Aug 2026 RTO email:
