@@ -83,7 +83,11 @@ export default async function Home({
 
   const [rows, mandates] = await Promise.all([
     db
-      .select({ date: dayEntries.date, status: dayEntries.status })
+      .select({
+        date: dayEntries.date,
+        status: dayEntries.status,
+        note: dayEntries.note,
+      })
       .from(dayEntries)
       .where(
         and(
@@ -128,6 +132,19 @@ export default async function Home({
     rows
       .filter((r) => r.date.startsWith(monthKey))
       .map((r) => [r.date, r.status])
+  );
+
+  // Every note in the displayed month, whatever the day's status — not just
+  // the holidays. A note outlives a status change (setDayStatus writes only
+  // `status`), so a day cycled holiday → office still has its name, and
+  // cycling it back to holiday must show that name again on the same tap.
+  // Filtering by status here would leave the footnote blank until a reload.
+  const monthNotes: Record<string, string> = Object.fromEntries(
+    rows.flatMap((r) =>
+      r.date.startsWith(monthKey) && r.note !== null
+        ? [[r.date, r.note] as [string, string]]
+        : []
+    )
   );
 
   // Everything scoped to the displayed month — the banner below and Calendar —
@@ -227,6 +244,7 @@ export default async function Home({
         key={monthKey}
         monthKey={monthKey}
         initialEntries={monthEntries}
+        notes={monthNotes}
         targetPercent={targetPercent}
         // Nothing in the component asks about a day outside this month, so the
         // window-wide list would only ship extra JSON — reason strings included,

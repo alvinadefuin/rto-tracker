@@ -78,12 +78,20 @@ function DayMark({
 export function Calendar({
   monthKey,
   initialEntries,
+  notes,
   targetPercent,
   mandates,
   fyBaseline,
 }: {
   monthKey: string;
   initialEntries: Entries;
+  /**
+   * Display names for days in this month, keyed by date. A separate prop rather
+   * than a richer `Entries`: that type is `Record<string, DayStatus>` throughout
+   * `rto.ts` and every arithmetic function takes it, so widening it would touch
+   * all of them to carry a string none of them read.
+   */
+  notes: Record<string, string>;
   targetPercent: number;
   mandates: WfhMandate[];
   fyBaseline: FyBaseline | null;
@@ -112,6 +120,13 @@ export function Calendar({
     ? computeFyStats(monthKey, fyBaseline, stats)
     : null;
   const weeks = monthGrid(year, month);
+
+  // Filtered against live `entries`, not against the props alone, so cycling a
+  // day off `holiday` drops it from the list on the same tap that changes the
+  // cell — and cycling one back adds it again.
+  const namedHolidays = Object.entries(notes)
+    .filter(([date]) => entries[date] === "holiday")
+    .sort(([a], [b]) => a.localeCompare(b));
 
   function showToast(message: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -269,6 +284,22 @@ export function Calendar({
           );
         })}
       </div>
+
+      {namedHolidays.length > 0 && (
+        <div className="space-y-1 border-l-2 border-fade pl-3">
+          <p className="font-mono text-[10px] tracking-widest text-fade uppercase">
+            Holidays
+          </p>
+          {namedHolidays.map(([date, name]) => (
+            <p key={date} className="font-mono text-xs text-fade">
+              <span className="mr-2 inline-block w-4 text-right tabular-nums">
+                {Number(date.slice(-2))}
+              </span>
+              {name}
+            </p>
+          ))}
+        </div>
+      )}
 
       <p className="text-xs text-fade">
         Tap a weekday to cycle: work from home → office → leave → holiday.
