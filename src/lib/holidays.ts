@@ -92,8 +92,19 @@ export function parseHolidayIcs(ics: string): ImportedHoliday[] {
 }
 
 export interface ImportPlan {
-  /** Rows to write, in feed order. */
+  /** Rows to write to `day_entries`, in feed order. */
   toInsert: ImportedHoliday[];
+  /**
+   * Rows for the `ph_holidays` reference calendar, in feed order.
+   *
+   * Nationwide and in range, but **weekends included and the earliest-entry
+   * clamp not applied** — this is the calendar, not the user's record, and
+   * `fyWindowStart` reads `day_entries` only, so these cannot move a financial
+   * year's start. Clamping them would blank the footnote for months before the
+   * record began, where the holidays are real even though the days are not
+   * counted.
+   */
+  reference: ImportedHoliday[];
   /** In range, but the user already has a row on that day. Left untouched. */
   alreadyMarked: number;
   /** In range, but earlier than the user's first recorded day. Never written. */
@@ -116,6 +127,11 @@ export interface ImportPlan {
  * Existing rows are never overwritten, which is what makes a re-run safe and
  * what keeps a tap beating the feed.
  *
+ * Only holidays that are non-working nationwide are considered at all; see
+ * `isNationwideHoliday`. A regional holiday reaches neither the user's record
+ * nor the reference calendar, and is dropped without a count, exactly as
+ * weekends and out-of-range days are.
+ *
  * Out-of-range days and weekends are dropped **without a count**. They are
  * facts about the feed and the calendar rather than about the user's record,
  * and a summary reading "18 marked · 10 weekends skipped" only invites the
@@ -133,11 +149,20 @@ export function planHolidayImport(
 ): ImportPlan {
   const existing = new Set(existingDates);
   const toInsert: ImportedHoliday[] = [];
+  const reference: ImportedHoliday[] = [];
   let alreadyMarked = 0;
   let beforeRecord = 0;
 
   for (const holiday of holidays) {
     if (holiday.date < startDate || holiday.date > endDate) continue;
+    // Before the weekend check, so a regional holiday never reaches the
+    // reference calendar either — the footnote lists what the office observes.
+    if (!isNationwideHoliday(holiday.name)) continue;
+
+    // The reference calendar takes every nationwide holiday in range, weekends
+    // and all, and is not clamped. Everything below narrows the user's record.
+    reference.push(holiday);
+
     if (isWeekend(holiday.date)) continue;
     // Before existing: a day that already has a row cannot be before the
     // earliest entry, since that is the minimum of those rows — so the order
@@ -154,7 +179,7 @@ export function planHolidayImport(
     toInsert.push(holiday);
   }
 
-  return { toInsert, alreadyMarked, beforeRecord };
+  return { toInsert, reference, alreadyMarked, beforeRecord };
 }
 
 /**

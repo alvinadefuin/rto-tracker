@@ -168,6 +168,7 @@ describe("planHolidayImport", () => {
     );
     expect(plan).toEqual({
       toInsert: [NINOY, HEROES, ALL_SOULS],
+      reference: [NINOY, HEROES, ALL_SOULS],
       alreadyMarked: 0,
       beforeRecord: 0,
     });
@@ -188,6 +189,7 @@ describe("planHolidayImport", () => {
     );
     expect(plan).toEqual({
       toInsert: [NINOY],
+      reference: [NINOY],
       alreadyMarked: 0,
       beforeRecord: 0,
     });
@@ -209,10 +211,11 @@ describe("planHolidayImport", () => {
   });
 
   it("includes both range endpoints", () => {
-    // 2026-08-03 is a Monday; 2027-07-30 is a Friday. Neither is a real
-    // holiday — the point is that the bounds are inclusive.
-    const first: ImportedHoliday = { date: "2026-08-03", name: "First" };
-    const last: ImportedHoliday = { date: "2027-07-30", name: "Last" };
+    // 2026-08-03 is a Monday; 2027-07-30 is a Friday. Neither is the real date
+    // of the holiday named — the names only need to pass the nationwide
+    // allowlist, and the assertion is that both bounds are inclusive.
+    const first: ImportedHoliday = { date: "2026-08-03", name: "Labor Day" };
+    const last: ImportedHoliday = { date: "2027-07-30", name: "Rizal Day" };
     const plan = planHolidayImport(
       [first, last],
       "2026-08-03",
@@ -238,6 +241,10 @@ describe("planHolidayImport", () => {
     );
     expect(plan).toEqual({
       toInsert: [ALL_SOULS],
+      reference: [
+        { date: "2026-11-01", name: "All Saints' Day" },
+        ALL_SOULS,
+      ],
       alreadyMarked: 0,
       beforeRecord: 0,
     });
@@ -253,6 +260,7 @@ describe("planHolidayImport", () => {
     );
     expect(plan).toEqual({
       toInsert: [HEROES],
+      reference: [NINOY, HEROES],
       alreadyMarked: 1,
       beforeRecord: 0,
     });
@@ -271,6 +279,7 @@ describe("planHolidayImport", () => {
     );
     expect(plan).toEqual({
       toInsert: [HEROES, ALL_SOULS],
+      reference: [NINOY, HEROES, ALL_SOULS],
       alreadyMarked: 0,
       beforeRecord: 1,
     });
@@ -286,6 +295,7 @@ describe("planHolidayImport", () => {
     );
     expect(plan).toEqual({
       toInsert: [NINOY],
+      reference: [NINOY],
       alreadyMarked: 0,
       beforeRecord: 0,
     });
@@ -301,6 +311,7 @@ describe("planHolidayImport", () => {
     );
     expect(plan).toEqual({
       toInsert: [],
+      reference: [NINOY],
       alreadyMarked: 1,
       beforeRecord: 0,
     });
@@ -324,7 +335,7 @@ describe("planHolidayImport", () => {
   it("returns an empty plan for an empty feed", () => {
     expect(
       planHolidayImport([], FY2027_START, FY2027_END, [], null)
-    ).toEqual({ toInsert: [], alreadyMarked: 0, beforeRecord: 0 });
+    ).toEqual({ toInsert: [], reference: [], alreadyMarked: 0, beforeRecord: 0 });
   });
 });
 
@@ -333,6 +344,7 @@ describe("formatImportSummary", () => {
     expect(
       formatImportSummary({
         toInsert: [NINOY, HEROES],
+        reference: [],
         alreadyMarked: 0,
         beforeRecord: 0,
       })
@@ -343,6 +355,7 @@ describe("formatImportSummary", () => {
     expect(
       formatImportSummary({
         toInsert: [NINOY],
+        reference: [],
         alreadyMarked: 3,
         beforeRecord: 0,
       })
@@ -353,6 +366,7 @@ describe("formatImportSummary", () => {
     expect(
       formatImportSummary({
         toInsert: [NINOY],
+        reference: [],
         alreadyMarked: 0,
         beforeRecord: 5,
       })
@@ -363,6 +377,7 @@ describe("formatImportSummary", () => {
     expect(
       formatImportSummary({
         toInsert: [NINOY],
+        reference: [],
         alreadyMarked: 3,
         beforeRecord: 5,
       })
@@ -375,6 +390,7 @@ describe("formatImportSummary", () => {
     expect(
       formatImportSummary({
         toInsert: [],
+        reference: [],
         alreadyMarked: 18,
         beforeRecord: 0,
       })
@@ -466,5 +482,146 @@ describe("isNationwideHoliday", () => {
 
   it("does not match a partial name", () => {
     expect(isNationwideHoliday("Christmas")).toBe(false);
+  });
+});
+
+// 2026-11-01 is a Sunday; 2026-08-26 is a Wednesday.
+const ALL_SAINTS: ImportedHoliday = {
+  date: "2026-11-01",
+  name: "All Saints' Day",
+};
+const MAULID: ImportedHoliday = {
+  date: "2026-08-26",
+  name: "Maulid un-Nabi",
+};
+
+describe("planHolidayImport — nationwide filter", () => {
+  it("does not mark a regional holiday", () => {
+    const plan = planHolidayImport(
+      [NINOY, MAULID, HEROES],
+      FY2027_START,
+      FY2027_END,
+      [],
+      null
+    );
+    expect(plan.toInsert).toEqual([NINOY, HEROES]);
+  });
+
+  // Dropped like weekends and out-of-range days: a fact about the feed, not
+  // about the user's record, so a summary must not invite them to wonder.
+  it("does not count a regional holiday in any tally", () => {
+    const plan = planHolidayImport(
+      [MAULID],
+      FY2027_START,
+      FY2027_END,
+      ["2026-08-26"],
+      "2026-08-01"
+    );
+    expect(plan).toEqual({
+      toInsert: [],
+      reference: [],
+      alreadyMarked: 0,
+      beforeRecord: 0,
+    });
+  });
+
+  it("keeps a tentative nationwide holiday", () => {
+    const eid: ImportedHoliday = {
+      date: "2027-03-10",
+      name: "Eid al-Fitr (tentative)",
+    };
+    const plan = planHolidayImport([eid], FY2027_START, FY2027_END, [], null);
+    expect(plan.toInsert).toEqual([eid]);
+  });
+});
+
+describe("planHolidayImport — reference calendar", () => {
+  it("keeps weekend holidays that toInsert drops", () => {
+    const plan = planHolidayImport(
+      [ALL_SAINTS, ALL_SOULS],
+      FY2027_START,
+      FY2027_END,
+      [],
+      null
+    );
+    expect(plan.toInsert).toEqual([ALL_SOULS]);
+    expect(plan.reference).toEqual([ALL_SAINTS, ALL_SOULS]);
+  });
+
+  // The reference calendar is the calendar, not the user's record.
+  // fyWindowStart reads day_entries only, so an unclamped reference row cannot
+  // move a financial year's start — and clamping it would hide real holidays
+  // from the footnote for months before the record began.
+  it("ignores the earliest-entry clamp", () => {
+    const plan = planHolidayImport(
+      [NINOY, HEROES],
+      FY2027_START,
+      FY2027_END,
+      [],
+      "2026-08-25"
+    );
+    expect(plan.toInsert).toEqual([HEROES]);
+    expect(plan.beforeRecord).toBe(1);
+    expect(plan.reference).toEqual([NINOY, HEROES]);
+  });
+
+  it("includes days the user has already marked", () => {
+    const plan = planHolidayImport(
+      [NINOY, HEROES],
+      FY2027_START,
+      FY2027_END,
+      ["2026-08-21"],
+      "2026-08-21"
+    );
+    expect(plan.toInsert).toEqual([HEROES]);
+    expect(plan.alreadyMarked).toBe(1);
+    expect(plan.reference).toEqual([NINOY, HEROES]);
+  });
+
+  it("excludes regional holidays", () => {
+    const plan = planHolidayImport(
+      [NINOY, MAULID],
+      FY2027_START,
+      FY2027_END,
+      [],
+      null
+    );
+    expect(plan.reference).toEqual([NINOY]);
+  });
+
+  it("still respects the date range", () => {
+    const early: ImportedHoliday = {
+      date: "2025-12-25",
+      name: "Christmas Day",
+    };
+    const plan = planHolidayImport(
+      [early, NINOY],
+      FY2027_START,
+      FY2027_END,
+      [],
+      null
+    );
+    expect(plan.reference).toEqual([NINOY]);
+  });
+
+  it("keeps feed order", () => {
+    const plan = planHolidayImport(
+      [ALL_SOULS, ALL_SAINTS, NINOY],
+      FY2027_START,
+      FY2027_END,
+      [],
+      null
+    );
+    expect(plan.reference.map((h) => h.date)).toEqual([
+      "2026-11-02",
+      "2026-11-01",
+      "2026-08-21",
+    ]);
+  });
+
+  it("is empty for an empty feed", () => {
+    expect(
+      planHolidayImport([], FY2027_START, FY2027_END, [], null).reference
+    ).toEqual([]);
   });
 });
