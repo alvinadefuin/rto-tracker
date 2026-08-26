@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { and, eq, gte, isNull, lte, min, or } from "drizzle-orm";
 import { auth, signOut } from "@/auth";
 import { db } from "@/db";
-import { dayEntries, rtoTargets, wfhMandates } from "@/db/schema";
+import { dayEntries, phHolidays, rtoTargets, wfhMandates } from "@/db/schema";
 import {
   aggregateMonths,
   financialYearBounds,
@@ -81,7 +81,7 @@ export default async function Home({
   const windowStart = fyWindowStart(monthKey, fyStartMonth, trackingStart);
   const queryStart = windowStart ?? monthKey;
 
-  const [rows, mandates] = await Promise.all([
+  const [rows, mandates, monthHolidays] = await Promise.all([
     db
       .select({
         date: dayEntries.date,
@@ -118,6 +118,18 @@ export default async function Home({
           )
         )
       ),
+    // The displayed month only. This is the PH calendar, not the user's record:
+    // it holds weekend holidays, is not user-scoped, and nothing computed reads
+    // it — the footnote is its only consumer.
+    db
+      .select({ date: phHolidays.date, name: phHolidays.name })
+      .from(phHolidays)
+      .where(
+        and(
+          gte(phHolidays.date, `${monthKey}-01`),
+          lte(phHolidays.date, `${monthKey}-31`)
+        )
+      ),
   ]);
 
   const targetPercent = resolvePercent(monthKey, periodRows);
@@ -132,19 +144,6 @@ export default async function Home({
     rows
       .filter((r) => r.date.startsWith(monthKey))
       .map((r) => [r.date, r.status])
-  );
-
-  // Every note in the displayed month, whatever the day's status — not just
-  // the holidays. A note outlives a status change (setDayStatus writes only
-  // `status`), so a day cycled holiday → office still has its name, and
-  // cycling it back to holiday must show that name again on the same tap.
-  // Filtering by status here would leave the footnote blank until a reload.
-  const monthNotes: Record<string, string> = Object.fromEntries(
-    rows.flatMap((r) =>
-      r.date.startsWith(monthKey) && r.note !== null
-        ? [[r.date, r.note] as [string, string]]
-        : []
-    )
   );
 
   // Everything scoped to the displayed month — the banner below and Calendar —
@@ -244,7 +243,7 @@ export default async function Home({
         key={monthKey}
         monthKey={monthKey}
         initialEntries={monthEntries}
-        notes={monthNotes}
+        holidays={monthHolidays}
         targetPercent={targetPercent}
         // Nothing in the component asks about a day outside this month, so the
         // window-wide list would only ship extra JSON — reason strings included,

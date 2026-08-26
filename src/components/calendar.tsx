@@ -78,7 +78,7 @@ function DayMark({
 export function Calendar({
   monthKey,
   initialEntries,
-  notes,
+  holidays,
   targetPercent,
   mandates,
   fyBaseline,
@@ -86,12 +86,12 @@ export function Calendar({
   monthKey: string;
   initialEntries: Entries;
   /**
-   * Display names for days in this month, keyed by date. A separate prop rather
-   * than a richer `Entries`: that type is `Record<string, DayStatus>` throughout
-   * `rto.ts` and every arithmetic function takes it, so widening it would touch
-   * all of them to carry a string none of them read.
+   * The PH holiday calendar for this month, weekend holidays included. A list
+   * rather than a richer `Entries`: that type is `Record<string, DayStatus>`
+   * throughout `rto.ts` and every arithmetic function takes it, so widening it
+   * would touch all of them to carry data none of them read.
    */
-  notes: Record<string, string>;
+  holidays: { date: string; name: string }[];
   targetPercent: number;
   mandates: WfhMandate[];
   fyBaseline: FyBaseline | null;
@@ -121,12 +121,28 @@ export function Calendar({
     : null;
   const weeks = monthGrid(year, month);
 
-  // Filtered against live `entries`, not against the props alone, so cycling a
-  // day off `holiday` drops it from the list on the same tap that changes the
-  // cell — and cycling one back adds it again.
-  const namedHolidays = Object.entries(notes)
-    .filter(([date]) => entries[date] === "holiday")
-    .sort(([a], [b]) => a.localeCompare(b));
+  // Every holiday the month has, annotated only where the day is *still
+  // eligible* — that is, where the listed holiday is not actually excluding it.
+  // `isEligible` excludes a day when it is mandated or its status is `leave` or
+  // `holiday`, so a leave day needs no annotation: it is already out of the
+  // pool, and saying "you marked leave" would imply it counts. Computed from
+  // live `entries`, so a tap updates the annotation on the same tap.
+  const monthHolidays = [...holidays]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(({ date, name }) => {
+      if (isWeekend(date)) {
+        const [y, m, d] = date.split("-").map(Number);
+        const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+        return { date, name, note: day === 6 ? "(Sat)" : "(Sun)" };
+      }
+      if (!isEligible(date, entries, mandates)) return { date, name, note: null };
+      return {
+        date,
+        name,
+        note:
+          entries[date] === "office" ? "(you marked office)" : "(not marked)",
+      };
+    });
 
   function showToast(message: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -285,17 +301,18 @@ export function Calendar({
         })}
       </div>
 
-      {namedHolidays.length > 0 && (
+      {monthHolidays.length > 0 && (
         <div className="space-y-1 border-l-2 border-fade pl-3">
           <p className="font-mono text-[10px] tracking-widest text-fade uppercase">
             Holidays
           </p>
-          {namedHolidays.map(([date, name]) => (
+          {monthHolidays.map(({ date, name, note }) => (
             <p key={date} className="font-mono text-xs text-fade">
               <span className="mr-2 inline-block w-4 text-right tabular-nums">
                 {Number(date.slice(-2))}
               </span>
               {name}
+              {note && <span className="ml-2 text-fade/70">{note}</span>}
             </p>
           ))}
         </div>
