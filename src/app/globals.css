@@ -7,6 +7,11 @@
   --color-stamp: #be3b2e;
   --color-leave: #5a6b8c;
   --color-holiday: #3e7a57;
+  /* Ochre, darkened from #a4762b (3.68:1) to clear the 4.5:1 text floor —
+     it renders as 10px uppercase mono, so the 3:1 non-text floor that
+     --color-fade sits on does not apply. 4.98:1, in the same band as its
+     siblings: stamp 4.97, leave 4.89, holiday 4.65. */
+  --color-training: #8a6220;
   --color-fade: #82877d;
   --font-sans: var(--font-franklin), system-ui, sans-serif;
   --font-mono: var(--font-plexmono), ui-monospace, monospace;
