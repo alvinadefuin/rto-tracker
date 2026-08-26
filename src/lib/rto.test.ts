@@ -1282,20 +1282,11 @@ describe("fyVerdict", () => {
     expect(verdict).not.toContain("0.2000");
   });
 
+  // Through month(), not a hand-rolled literal: the helper exists so a fixture
+  // cannot describe a month computeMonthStats could never produce, and going
+  // around it re-opens that door.
   it("keeps the singular for exactly one remaining day", () => {
-    const m: MonthStats = {
-      eligibleDays: 22,
-      officeDays: 10,
-      requiredPoints: 1100,
-      requiredDays: 11,
-      remainingPoints: 100,
-      remainingNeeded: 1,
-      targetPercent: 50,
-      achievedPercent: 45,
-      mandatedDays: 0,
-      weeks: [],
-    };
-    expect(fyVerdict(stats(), m)).toBe(
+    expect(fyVerdict(stats(), month(1))).toBe(
       "3 days ahead — this month's 1 remaining day is covered."
     );
   });
@@ -1407,14 +1398,31 @@ describe("financial year still rounds exactly once", () => {
     prior,
   });
 
+  /** January 2026 with its later weekdays on leave, leaving `keep` eligible. */
+  function januaryLeaveTo(keep: number): Entries {
+    const entries: Entries = {};
+    for (const date of monthWeekdays(2026, 1).slice(keep)) {
+      entries[date] = "leave";
+    }
+    return entries;
+  }
+
   it("owes a whole day for a fractional year total", () => {
-    // Three months of 8.8 = 26.4 points-days. Summing monthly figures the old
-    // way (ceil each to 9) would owe 27.
-    const prior: MonthsAggregate = { officeDays: 0, weightedEligible: 1760 };
-    const month = computeMonthStats(2026, 1, {}, 40);
+    // The fraction has to be one that separates the two roundings, or the test
+    // proves nothing: three months of 8.8 give 27 either way. Two months of
+    // 5.2 do not — ceil(10.4) is 11 where two ceil(5.2)s are 12.
+    const eligible = 13; // 13 × 40% = 520 points = 5.2 days
+    const prior: MonthsAggregate = { officeDays: 0, weightedEligible: 520 };
+    const month = computeMonthStats(2026, 1, januaryLeaveTo(eligible), 40);
     const fy = computeFyStats("2026-01", baseline(prior), month);
-    expect(month.requiredDays).toBe(8.8); // the month does not round
-    expect(fy.cumulativeRequired).toBe(27); // ceil(26.4) — the year does
+
+    expect(month.requiredPoints).toBe(520);
+    expect(month.requiredDays).toBe(5.2); // the month does not round
+    expect(fy.cumulativeRequired).toBe(11); // ceil(10.4) — the year does, once
+
+    const monthlySum = 2 * Math.ceil(520 / 100);
+    expect(monthlySum).toBe(12);
+    expect(fy.cumulativeRequired).toBeLessThan(monthlySum);
   });
 
   it("derives the displayed month's contribution from its points", () => {

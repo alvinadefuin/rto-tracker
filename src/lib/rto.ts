@@ -334,16 +334,23 @@ export function monthWeekdays(year: number, month: number): string[] {
 }
 
 /**
- * Statuses that take a weekday out of the eligible base. One list, because the
- * alternative is a chain of `!==` that a fifth status silently falls through.
+ * Whether each status leaves a weekday in the eligible base. A total Record
+ * rather than a list of exclusions: a fifth `DayStatus` fails to compile here,
+ * where an array — like the chain of `!==` this replaced — would accept it and
+ * silently treat it as eligible.
  */
-const NON_ELIGIBLE: readonly DayStatus[] = ["leave", "holiday", "training"];
+const ELIGIBLE_BY_STATUS: Record<DayStatus, boolean> = {
+  office: true,
+  leave: false,
+  holiday: false,
+  training: false,
+};
 
 /**
  * True when a **weekday** counts toward the requirement. Callers filter
  * weekends first. A mandate wins over any recorded status — the exclusion is a
  * property of the mandate, not of what the user tapped. Every other exclusion
- * is NON_ELIGIBLE above; an unrecorded weekday is WFH, which stays eligible.
+ * is ELIGIBLE_BY_STATUS above; an unrecorded weekday is WFH, and stays eligible.
  *
  * This is the single definition of the eligible-day rule; computeMonthStats and
  * the calendar's per-week badge both defer to it.
@@ -355,7 +362,7 @@ export function isEligible(
 ): boolean {
   if (isMandated(date, mandates)) return false;
   const status = entries[date];
-  return status === undefined || !NON_ELIGIBLE.includes(status);
+  return status === undefined || ELIGIBLE_BY_STATUS[status];
 }
 
 export function computeMonthStats(
@@ -580,8 +587,9 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     // month's whole requirement: a non-negative balance means the month's
     // remaining days are paid for. Do not "fix" the apparent contradiction of
     // "1 day ahead" next to "9 remaining days are covered".
-    // Points, not the fractional day: the month's shortfall can be 0.2, and
-    // both the test and the number formatting have to be exact.
+    //
+    // Points, not the fractional day: the month's shortfall can be 0.2, so
+    // both the comparison and the number formatting have to be exact.
     if (monthStats.remainingPoints > 0) {
       const noun =
         monthStats.remainingPoints === 100
