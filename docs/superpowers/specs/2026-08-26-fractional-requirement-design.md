@@ -50,7 +50,11 @@ A consequence to state plainly rather than discover later: **the year is
 stricter than the sum of its months.** A year totalling 19.8 still asks for 20,
 because a fifth of a day cannot be worked. "5.2 required this month" and a year
 demanding a whole extra day therefore coexist, by design. `fyVerdict` already
-treats the year as the number to act on, and that copy is unchanged.
+treats the year as the number to act on, and its wording is unchanged — but one
+of its branches embeds the **month's** remaining figure. That number must come
+from `formatDays(remainingPoints)`, and its singular must key off
+`remainingPoints === 100`, or the sentence renders "0.20000000000000018
+remaining days are covered".
 
 **Training gets its own status** rather than reusing `leave`. The two are
 computationally identical — both leave the day out of the eligible base — so the
