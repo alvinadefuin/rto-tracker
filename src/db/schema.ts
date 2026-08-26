@@ -89,6 +89,7 @@ export const dayStatusEnum = pgEnum("day_status", [
   "office",
   "leave",
   "holiday",
+  "training",
 ]);
 
 export const dayEntries = pgTable(
