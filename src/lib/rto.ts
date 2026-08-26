@@ -573,13 +573,16 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     // month's whole requirement: a non-negative balance means the month's
     // remaining days are paid for. Do not "fix" the apparent contradiction of
     // "1 day ahead" next to "9 remaining days are covered".
-    if (monthStats.remainingNeeded > 0) {
-      const remaining = plural(
-        monthStats.remainingNeeded,
-        "remaining day is",
-        "remaining days are"
-      );
-      return `${ahead} — this month's ${remaining} covered.`;
+    // Points, not the fractional day: the month's shortfall can be 0.2, and
+    // both the test and the number formatting have to be exact.
+    if (monthStats.remainingPoints > 0) {
+      const noun =
+        monthStats.remainingPoints === 100
+          ? "remaining day is"
+          : "remaining days are";
+      return `${ahead} — this month's ${formatDays(
+        monthStats.remainingPoints
+      )} ${noun} covered.`;
     }
     return `${ahead} — banked toward later months.`;
   }

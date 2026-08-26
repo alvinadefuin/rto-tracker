@@ -1261,6 +1261,44 @@ describe("fyVerdict", () => {
       )
     ).toBe("1 office day short of FY2027's full year.");
   });
+
+  it("renders a part-day shortfall without float residue", () => {
+    const m: MonthStats = {
+      eligibleDays: 13,
+      officeDays: 5,
+      requiredPoints: 520,
+      requiredDays: 5.2,
+      remainingPoints: 20,
+      remainingNeeded: 0.2,
+      targetPercent: 40,
+      achievedPercent: 38,
+      mandatedDays: 6,
+      weeks: [],
+    };
+    const verdict = fyVerdict(stats(), m); // stats() defaults to balance 3
+    expect(verdict).toBe(
+      "3 days ahead — this month's 0.2 remaining days are covered."
+    );
+    expect(verdict).not.toContain("0.2000");
+  });
+
+  it("keeps the singular for exactly one remaining day", () => {
+    const m: MonthStats = {
+      eligibleDays: 22,
+      officeDays: 10,
+      requiredPoints: 1100,
+      requiredDays: 11,
+      remainingPoints: 100,
+      remainingNeeded: 1,
+      targetPercent: 50,
+      achievedPercent: 45,
+      mandatedDays: 0,
+      weeks: [],
+    };
+    expect(fyVerdict(stats(), m)).toBe(
+      "3 days ahead — this month's 1 remaining day is covered."
+    );
+  });
 });
 
 describe("formatDays", () => {
