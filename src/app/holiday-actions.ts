@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, gte, lte, min } from "drizzle-orm";
 import { db } from "@/db";
-import { dayEntries } from "@/db/schema";
+import { dayEntries, phHolidays } from "@/db/schema";
 import type { ActionState } from "@/lib/action-state";
 import { requireUserId } from "@/lib/require-user";
 import { financialYearBounds, formatFinancialYear } from "@/lib/rto";
@@ -126,6 +126,31 @@ export async function importHolidays(
         }))
       )
       .onConflictDoNothing();
+  }
+
+  if (plan.reference.length > 0) {
+    // Replace the year's reference rows rather than upserting them, so a
+    // re-import is authoritative: when a tentative Islamic date shifts —
+    // Eid al-Fitr moving off 2027-03-10 — the stale row goes instead of
+    // accumulating beside the new one.
+    //
+    // neon-http has no transaction, so a failure between these two statements
+    // leaves the year's reference rows missing. Accepted: the table is
+    // display-only, nothing computed reads it, and re-running the import
+    // restores it.
+    //
+    // The guard above cannot be false when the action reaches here — toInsert,
+    // alreadyMarked and beforeRecord all derive from the same nationwide,
+    // in-range set that fills `reference`, so an empty `reference` means all
+    // three are zero and the out-of-range error returned further up. It is
+    // written anyway, because Drizzle throws on an empty values array and that
+    // invariant should not be load-bearing at a distance.
+    await db
+      .delete(phHolidays)
+      .where(and(gte(phHolidays.date, startDate), lte(phHolidays.date, endDate)));
+    await db
+      .insert(phHolidays)
+      .values(plan.reference.map((h) => ({ date: h.date, name: h.name })));
   }
 
   revalidatePath("/");
