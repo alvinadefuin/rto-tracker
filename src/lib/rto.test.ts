@@ -1090,12 +1090,12 @@ describe("fyVerdict", () => {
   function month(remainingDays: number): MonthStats {
     return {
       eligibleDays: 22,
-      officeDays: 9 - remainingDays,
-      requiredPoints: 880,
-      requiredDays: 8.8,
+      officeDays: 11 - remainingDays,
+      requiredPoints: 1100,
+      requiredDays: 11,
       remainingPoints: remainingDays * 100,
       remainingNeeded: remainingDays,
-      targetPercent: 40,
+      targetPercent: 50,
       achievedPercent: 0,
       mandatedDays: 0,
       weeks: [],

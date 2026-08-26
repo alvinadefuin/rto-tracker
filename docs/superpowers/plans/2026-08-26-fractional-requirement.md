@@ -87,7 +87,9 @@ Expected: FAIL — `formatDays is not a function` (or a TypeScript error that th
 
 - [ ] **Step 3: Write minimal implementation**
 
-Add to `src/lib/rto.ts`, directly below the `pad` helper so it sits with the other string builders:
+Add to `src/lib/rto.ts`, immediately **after `formatMandateRange` and before `const DATE_RE`**, so it joins the `formatMonth` / `formatDate` / `formatPeriodRange` / `formatMandateRange` family.
+
+Do **not** put it below `pad`. `pad`'s own comment says it is "defined here rather than beside the other string helpers below" — it is a deliberate exception, placed next to the month-key builders that call it. Inserting a formatter there lands it in the one neighbourhood that comment rules out and separates `pad` from its callers.
 
 ```ts
 /**
@@ -296,12 +298,12 @@ Also update the `month()` fixture at ~line 1087, which builds a whole `MonthStat
   function month(remainingDays: number): MonthStats {
     return {
       eligibleDays: 22,
-      officeDays: 9 - remainingDays,
-      requiredPoints: 880,
-      requiredDays: 8.8,
+      officeDays: 11 - remainingDays,
+      requiredPoints: 1100,
+      requiredDays: 11,
       remainingPoints: remainingDays * 100,
       remainingNeeded: remainingDays,
-      targetPercent: 40,
+      targetPercent: 50,
       achievedPercent: 0,
       mandatedDays: 0,
       weeks: [],
@@ -450,13 +452,13 @@ not see it.
   it("keeps the singular for exactly one remaining day", () => {
     const m: MonthStats = {
       eligibleDays: 22,
-      officeDays: 8,
-      requiredPoints: 880,
-      requiredDays: 8.8,
+      officeDays: 10,
+      requiredPoints: 1100,
+      requiredDays: 11,
       remainingPoints: 100,
       remainingNeeded: 1,
-      targetPercent: 40,
-      achievedPercent: 36,
+      targetPercent: 50,
+      achievedPercent: 45,
       mandatedDays: 0,
       weeks: [],
     };
@@ -895,8 +897,12 @@ One acceptance test proving the whole chain produces the number the employer sta
 //   21 working days → 19 after holidays → 13 after a 6-day exclusion
 //   13 × 40% = 5.2 days required, further reduced by leave and training.
 describe("the Aug 2026 RTO email", () => {
+  // Wed 12 – Wed 19: weekdays 12, 13, 14, 17, 18, 19 = six. The window
+  // deliberately avoids Fri 21 Aug — a day that is both mandated and a holiday
+  // is excluded once, not twice, so a mandate spanning the 21st would leave 14
+  // eligible days rather than 13 and break the employer's worked example.
   const mandate: WfhMandate[] = [
-    { startDate: "2026-08-17", endDate: "2026-08-24" },
+    { startDate: "2026-08-12", endDate: "2026-08-19" },
   ];
 
   it("reproduces the stated 5.2", () => {
@@ -936,7 +942,7 @@ describe("the Aug 2026 RTO email", () => {
 Run: `npx vitest run src/lib/rto.test.ts -t "Aug 2026 RTO email"`
 Expected: PASS, 2 tests. Everything it needs is already built; this is the acceptance check, not new behaviour.
 
-If `mandatedDays` is not 6, recount: 17–24 Aug 2026 inclusive spans Mon 17, Tue 18, Wed 19, Thu 20, Fri 21, Mon 24 — six weekdays, and Fri 21 is also a holiday, which is why it is one mandated day and not one of each.
+If `mandatedDays` is not 6, recount: 12–19 Aug 2026 inclusive spans Wed 12, Thu 13, Fri 14, Mon 17, Tue 18, Wed 19 — six weekdays, and none of them is a holiday, so the three exclusions do not overlap and `21 − 6 − 2 = 13` holds.
 
 - [ ] **Step 3: Full verification**
 
