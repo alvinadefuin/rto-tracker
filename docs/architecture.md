@@ -20,6 +20,7 @@ day_entries
   user_id  text  → users.id (cascade delete)
   date     text  'YYYY-MM-DD'
   status   enum  'office' | 'leave' | 'holiday'
+  note     text  nullable; imported holiday's name, display only
   PRIMARY KEY (user_id, date)
 ```
 
@@ -33,6 +34,8 @@ parsing of strings — UTC component math only, to avoid timezone drift).
 - Eligible working days in a month = weekdays − mandated WFH − holidays − leaves
 - Mandated WFH days come from `wfh_mandates` day ranges, not from `day_entries`, and
   take precedence over any recorded status
+- Imported public holidays need no rule of their own: they are `holiday` rows in
+  `day_entries`, already out of the eligible pool, and a tap overwrites them
 - Required office days = `ceil(eligible × targetPercent / 100)`, where `targetPercent`
   comes from `rto_targets` for that month, defaulting to 40
 - RTO % = office ÷ eligible (0 when eligible is 0)
@@ -60,6 +63,13 @@ The page also loads the FY-to-date window — entries and mandates from the FY's
 counted month through the displayed month — and passes the earlier months to the client
 as a two-number aggregate, so the calendar can recompute the year's position locally
 after each tap.
+
+The settings page can import Philippine public holidays for one financial year: it fetches
+Google's public PH holiday ICS feed, keeps only events described as public holidays, and
+plans the write with `planHolidayImport` — which drops weekends, never overwrites an
+existing row, and never writes a day earlier than the user's first recorded one, so the
+import cannot move the FY window's start. The surviving days are inserted as `holiday`
+rows in a single statement, and `/` and `/settings` are revalidated.
 
 ## Schema delivery
 

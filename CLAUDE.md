@@ -131,6 +131,42 @@ rendered (faded, as a record) but excluded from `officeDays` — which is what k
 `officeDays ≤ eligibleDays` and `achievedPercent ≤ 100`. `MonthStats.mandatedDays` exists
 because `eligibleDays === 0` now has two causes and the copy differs between them.
 
+**Imported public holidays are ordinary `day_entries` rows.** `importHolidays` in
+`src/app/holiday-actions.ts` reads Google's public Philippine holiday ICS feed and writes
+`status: "holiday"` rows for one financial year at a time, with the holiday's name in the
+new nullable `note` column — display copy only, never parsed, exactly like
+`wfh_mandates.reason`. Nothing about the arithmetic changes: `isEligible` already excludes
+`holiday`, so the requirement falls out for free. The country is hardcoded for the same
+reason `FY_START_MONTH` is.
+
+Being rows rather than a third overlay is the design, not laziness. **A tap must beat the
+feed** — a proclamation can be revoked, or the office opens anyway — and an overlay would
+inherit the mandate rule, where the exclusion beats anything the user tapped. As rows, a
+tap simply rewrites them. The import never overwrites an existing row, which is what makes
+a re-run safe.
+
+**The import never writes a day earlier than `min(day_entries.date)`.** This is the
+feature's one load-bearing invariant, enforced and tested in `planHolidayImport`
+(`src/lib/holidays.ts`), never in the action. Imported holidays *are* `day_entries` rows,
+so `fyWindowStart` derives an FY window's start from them — an unclamped import would
+silently redefine which months a year bills. For a record beginning 11 Feb 2026,
+importing FY2026 without the clamp would write Ninoy Aquino Day 2025, move the window
+start back to Aug 2025, and report a five-month deficit against months of unemployment.
+
+`parseHolidayIcs` keeps only events whose ICS `DESCRIPTION` begins `Public holiday`. That
+is an allowlist on purpose: the live feed carries exactly two values, `Public holiday` and
+`Observance`, and were the field renamed, an allowlist marks nothing and the action says
+so, where a denylist would mark Easter Sunday a holiday and quietly lower the requirement.
+An empty parse from a feed that answered is therefore reported as a format change, not as
+a year without holidays.
+
+`day_entries.note` survives a status change and dies with the row: `setDayStatus` upserts
+`set: { status }` only. So cycling 25 Dec holiday → office keeps "Christmas Day" attached,
+and the calendar footnote — which requires `status === "holiday"` — simply stops listing
+it. `page.tsx` therefore sends `<Calendar>` **every** note in the month, not only those on
+holiday rows; filtering by status server-side would leave the footnote blank until a
+reload.
+
 **Compliance is cumulative within a financial year, which runs Aug–Jul.** An FY is
 named for the calendar year it ends in: FY2027 is Aug 2026 – Jul 2027
 (`FY_START_MONTH = 8`). Within a year a surplus settles a shortfall — miss a day in
@@ -169,7 +205,9 @@ month (`searchParams` is a Promise in this Next version — `await` it). It then
 `day_entries` and `wfh_mandates` across the whole FY window rather than the displayed
 month alone — the window is one month wide only in August, or when nothing was recorded
 before the displayed month — and hands `<Calendar>` a plain `Entries` map of just that
-month's rows, alongside the `FyBaseline` for the months before it.
+month's rows, a `notes` map of
+every note in that month whatever the row's status, and the `FyBaseline` for the months
+before it.
 
 **`<Calendar>` must keep its `key={monthKey}`.** Next does not remount on search-param
 changes, and Calendar seeds its state from `initialEntries` only on mount — so without the
