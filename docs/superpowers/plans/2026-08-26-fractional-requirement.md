@@ -818,10 +818,12 @@ git commit -m "feat: add a training day status"
 In `src/app/globals.css`, inside the `@theme` block alongside `--color-leave` and `--color-holiday`:
 
 ```css
-  --color-training: #a4762b;
+  --color-training: #8a6220;
 ```
 
 Ochre — distinct from the stamp red, the leave blue-grey, and the holiday green. There is no `tailwind.config.*`; tokens live here and `text-training` follows from the variable name.
+
+The value matters: `DayMark` renders the status as 10px mono text, so 4.5:1 applies, not the 3:1 non-text floor `--color-fade` sits on. A lighter ochre such as `#a4762b` measures 3.68:1 and fails. `#8a6220` is 4.98:1 at the same hue (37°), which puts it in the band its siblings occupy — stamp 4.97, leave 4.89, holiday 4.64.
 
 - [ ] **Step 2: Extend the cycle and the label**
 
