@@ -874,13 +874,15 @@ describe("aggregateMonths", () => {
     expect(aggregateMonths(AUG_SEP, entries, [], []).officeDays).toBe(3);
   });
 
-  it("drops leave and holiday days from the weighted total", () => {
+  it("drops leave, holiday and training days from the weighted total", () => {
     const entries: Entries = {
       "2026-08-05": "leave", // Wed
+      "2026-08-06": "training", // Thu
       "2026-09-01": "holiday", // Tue
     };
+    // August keeps 19 of its 21 weekdays, September 21 of its 22.
     expect(aggregateMonths(AUG_SEP, entries, [], []).weightedEligible).toBe(
-      20 * 40 + 21 * 40
+      19 * 40 + 21 * 40
     );
   });
 
@@ -1590,6 +1592,92 @@ describe("financial year still rounds exactly once", () => {
     const month = computeMonthStats(2026, 1, {}, 40);
     const fy = computeFyStats("2026-01", baseline(prior), month);
     expect(fy.cumulativeRequired).toBe(9); // ceil(8.8), one month only
+  });
+});
+
+describe("the FY roll-up across a rate change", () => {
+  // FY2027 starts in August, so Aug–Oct 2026 with October displayed is a whole
+  // window with nothing carried in. Aug 2026 has 21 weekdays, Sep and Oct 22
+  // each. The rate rises from 40% to 60% part-way through.
+  const periods: TargetPeriod[] = [
+    { startMonth: "2026-08", endMonth: "2026-08", percent: 40 },
+    { startMonth: "2026-09", endMonth: null, percent: 60 },
+  ];
+
+  it("rounds once for the year, over months resolved at different rates", () => {
+    const prior = aggregateMonths(["2026-08", "2026-09"], {}, periods, []);
+    expect(prior.weightedEligible).toBe(21 * 40 + 22 * 60); // 840 + 1320
+
+    // The page resolves the displayed month the same way aggregateMonths
+    // resolves the ones behind it — the rate change has to survive both.
+    const october = computeMonthStats(
+      2026,
+      10,
+      {},
+      resolvePercent("2026-10", periods)
+    );
+    expect(october.targetPercent).toBe(60);
+    expect(october.requiredPoints).toBe(1320); // 22 × 60%
+
+    const fy = computeFyStats(
+      "2026-10",
+      { windowStartMonth: "2026-08", prior },
+      october
+    );
+    // 840 + 1320 + 1320 = 3480 points = 34.8 days, ceiled exactly once.
+    expect(fy.cumulativeRequired).toBe(35);
+
+    // The claim the design rests on: rounding each month first would cost two
+    // whole office days over three months, and twelve months compound it.
+    const monthlySum =
+      Math.ceil((21 * 40) / 100) + // ceil(8.4)  = 9
+      Math.ceil((22 * 60) / 100) + // ceil(13.2) = 14
+      Math.ceil((22 * 60) / 100); // ceil(13.2) = 14
+    expect(monthlySum).toBe(37);
+    expect(fy.cumulativeRequired).toBeLessThan(monthlySum);
+  });
+});
+
+describe("the year is stricter than its months", () => {
+  // Aug 2026 is the first month of FY2027, so the window is that month alone
+  // and the year's figure is its requirement rounded once, with nothing
+  // carried in to settle the fraction against.
+  const OFFICE: Entries = {
+    "2026-08-03": "office", // Mon
+    "2026-08-04": "office", // Tue
+    "2026-08-05": "office", // Wed
+    "2026-08-06": "office", // Thu
+    "2026-08-07": "office", // Fri
+    "2026-08-10": "office", // Mon
+    "2026-08-11": "office", // Tue
+    "2026-08-12": "office", // Wed
+  };
+
+  it("asks for a whole day when the month is 0.4 short", () => {
+    const august = computeMonthStats(2026, 8, OFFICE, 40);
+    expect(august.eligibleDays).toBe(21); // every weekday in Aug 2026
+    expect(august.officeDays).toBe(8);
+    expect(august.requiredPoints).toBe(840); // 21 × 40% = 8.4 days
+
+    const fy = computeFyStats(
+      "2026-08",
+      {
+        windowStartMonth: "2026-08",
+        prior: { officeDays: 0, weightedEligible: 0 },
+      },
+      august
+    );
+
+    // The month and the year disagree on purpose, and the disagreement is the
+    // design rather than a rounding bug to reconcile: the month states the
+    // exact debt, 0.4 of a day, and the year states what can be done about it.
+    // A fifth of a day cannot be worked, so the year rounds up where the month
+    // does not. Do not make one of these follow the other.
+    expect(august.remainingPoints).toBe(40);
+    expect(formatDays(august.remainingPoints)).toBe("0.4");
+    expect(fy.cumulativeRequired).toBe(9); // ceil(840 / 100)
+    expect(fy.balance).toBe(-1);
+    expect(fyVerdict(fy, august)).toBe("1 more office day needed to be level.");
   });
 });
 
