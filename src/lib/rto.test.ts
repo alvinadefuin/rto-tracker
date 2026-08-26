@@ -1424,3 +1424,43 @@ describe("financial year still rounds exactly once", () => {
     expect(fy.cumulativeRequired).toBe(9); // ceil(8.8), one month only
   });
 });
+
+describe("training days", () => {
+  it("takes a day out of the eligible base, like leave", () => {
+    const s = computeMonthStats(2026, 1, { "2026-01-05": "training" });
+    expect(s.eligibleDays).toBe(21); // 22 weekdays − 1
+    expect(s.officeDays).toBe(0);
+    expect(s.requiredPoints).toBe(840);
+  });
+
+  it("is not eligible", () => {
+    expect(isEligible("2026-01-05", { "2026-01-05": "training" }, [])).toBe(
+      false
+    );
+  });
+
+  it("counts once when the day is also mandated", () => {
+    const mandate: WfhMandate[] = [
+      { startDate: "2026-01-05", endDate: "2026-01-05" },
+    ];
+    const s = computeMonthStats(
+      2026,
+      1,
+      { "2026-01-05": "training" },
+      40,
+      mandate
+    );
+    expect(s.eligibleDays).toBe(21);
+    expect(s.mandatedDays).toBe(1); // one mandated day, not one of each
+  });
+
+  it("reduces the requirement alongside leave and holidays", () => {
+    const s = computeMonthStats(2026, 1, {
+      "2026-01-01": "holiday",
+      "2026-01-02": "leave",
+      "2026-01-05": "training",
+    });
+    expect(s.eligibleDays).toBe(19);
+    expect(s.requiredDays).toBe(7.6);
+  });
+});

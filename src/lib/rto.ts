@@ -1,4 +1,4 @@
-export type DayStatus = "office" | "leave" | "holiday";
+export type DayStatus = "office" | "leave" | "holiday" | "training";
 export type Entries = Record<string, DayStatus>; // key: 'YYYY-MM-DD'
 
 export interface WeekStats {
@@ -9,7 +9,7 @@ export interface WeekStats {
 }
 
 export interface MonthStats {
-  eligibleDays: number; // weekdays − mandated − holidays − leaves
+  eligibleDays: number; // weekdays − mandated − holidays − leaves − training
   officeDays: number;
   /**
    * eligibleDays × targetPercent, in integer percent-points and deliberately
@@ -334,9 +334,16 @@ export function monthWeekdays(year: number, month: number): string[] {
 }
 
 /**
+ * Statuses that take a weekday out of the eligible base. One list, because the
+ * alternative is a chain of `!==` that a fifth status silently falls through.
+ */
+const NON_ELIGIBLE: readonly DayStatus[] = ["leave", "holiday", "training"];
+
+/**
  * True when a **weekday** counts toward the requirement. Callers filter
  * weekends first. A mandate wins over any recorded status — the exclusion is a
- * property of the mandate, not of what the user tapped.
+ * property of the mandate, not of what the user tapped. Every other exclusion
+ * is NON_ELIGIBLE above; an unrecorded weekday is WFH, which stays eligible.
  *
  * This is the single definition of the eligible-day rule; computeMonthStats and
  * the calendar's per-week badge both defer to it.
@@ -348,7 +355,7 @@ export function isEligible(
 ): boolean {
   if (isMandated(date, mandates)) return false;
   const status = entries[date];
-  return status !== "leave" && status !== "holiday";
+  return status === undefined || !NON_ELIGIBLE.includes(status);
 }
 
 export function computeMonthStats(
