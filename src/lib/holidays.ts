@@ -1,3 +1,5 @@
+import { isWeekend } from "./rto";
+
 /**
  * A public holiday as the feed reports it.
  *
@@ -87,4 +89,70 @@ export function parseHolidayIcs(ics: string): ImportedHoliday[] {
     });
   }
   return holidays;
+}
+
+export interface ImportPlan {
+  /** Rows to write, in feed order. */
+  toInsert: ImportedHoliday[];
+  /** In range, but the user already has a row on that day. Left untouched. */
+  alreadyMarked: number;
+  /** In range, but earlier than the user's first recorded day. Never written. */
+  beforeRecord: number;
+}
+
+/**
+ * Which holidays to write, and why the rest were left out.
+ *
+ * `earliestEntry` is the user's first recorded day (`min(day_entries.date)`),
+ * or null when nothing is recorded. **Nothing before it is ever written.**
+ * Imported holidays are `day_entries` rows, and `fyWindowStart` derives the
+ * start of a financial-year window from the earliest of them — so an unclamped
+ * import would silently redefine which months a year bills. Concretely, for a
+ * record beginning 11 Feb 2026, importing FY2026 without this clamp would write
+ * Ninoy Aquino Day 2025, move the window start back to Aug 2025, and report a
+ * five-month deficit against months of unemployment. Clamping here makes that
+ * impossible by construction rather than by remembering.
+ *
+ * Existing rows are never overwritten, which is what makes a re-run safe and
+ * what keeps a tap beating the feed.
+ *
+ * Out-of-range days and weekends are dropped **without a count**. They are
+ * facts about the feed and the calendar rather than about the user's record,
+ * and a summary reading "18 marked · 10 weekends skipped" only invites the
+ * reader to wonder what went wrong.
+ *
+ * Pure string comparison throughout: the keys are fixed-width and zero-padded,
+ * so `<` and `>` are exact calendar comparisons and no Date is constructed.
+ */
+export function planHolidayImport(
+  holidays: ImportedHoliday[],
+  startDate: string,
+  endDate: string,
+  existingDates: string[],
+  earliestEntry: string | null
+): ImportPlan {
+  const existing = new Set(existingDates);
+  const toInsert: ImportedHoliday[] = [];
+  let alreadyMarked = 0;
+  let beforeRecord = 0;
+
+  for (const holiday of holidays) {
+    if (holiday.date < startDate || holiday.date > endDate) continue;
+    if (isWeekend(holiday.date)) continue;
+    // Before existing: a day that already has a row cannot be before the
+    // earliest entry, since that is the minimum of those rows — so the order
+    // of these two cannot change a count. It reads in the order the rules were
+    // decided.
+    if (earliestEntry !== null && holiday.date < earliestEntry) {
+      beforeRecord++;
+      continue;
+    }
+    if (existing.has(holiday.date)) {
+      alreadyMarked++;
+      continue;
+    }
+    toInsert.push(holiday);
+  }
+
+  return { toInsert, alreadyMarked, beforeRecord };
 }
