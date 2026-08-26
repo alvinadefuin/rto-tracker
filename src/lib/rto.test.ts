@@ -27,6 +27,7 @@ import {
   fyWindowStart,
   computeFyStats,
   fyVerdict,
+  monthMeter,
   type Entries,
   type TargetPeriod,
   type WfhMandate,
@@ -1386,6 +1387,165 @@ describe("computeMonthStats in percent-points", () => {
     const s = computeMonthStats(2026, 8, entries, 40, mandate);
     expect(s.officeDays).toBe(7);
     expect(s.remainingPoints).toBe(0);
+  });
+});
+
+describe("monthMeter", () => {
+  // Aug 2026: 21 weekdays − 6 mandated (Wed 12 – Wed 19) − 2 holidays = 13
+  // eligible, and 13 × 40% = 520 points = 5.2 days. The fractional requirement
+  // the rings have to draw.
+  const mandate: WfhMandate[] = [
+    { startDate: "2026-08-12", endDate: "2026-08-19" },
+  ];
+  const holidays: Entries = {
+    "2026-08-21": "holiday", // Fri
+    "2026-08-31": "holiday", // Mon
+  };
+  // Mon 3 – Tue 11, all weekdays clear of the mandate and of both holidays.
+  const AUG_FREE = [
+    "2026-08-03",
+    "2026-08-04",
+    "2026-08-05",
+    "2026-08-06",
+    "2026-08-07",
+    "2026-08-10",
+    "2026-08-11",
+  ];
+
+  /** That August, stamped for its first `office` free weekdays. */
+  function august(office: number): MonthStats {
+    const entries: Entries = { ...holidays };
+    for (const date of AUG_FREE.slice(0, office)) entries[date] = "office";
+    return computeMonthStats(2026, 8, entries, 40, mandate);
+  }
+
+  /**
+   * January 2026 with its later weekdays on leave, leaving `keep` eligible, of
+   * which the first `office` are stamped. `office` must not exceed `keep`.
+   */
+  function january(keep: number, office = 0): MonthStats {
+    const weekdays = monthWeekdays(2026, 1);
+    const entries: Entries = {};
+    for (const date of weekdays.slice(keep)) entries[date] = "leave";
+    for (const date of weekdays.slice(0, office)) entries[date] = "office";
+    return computeMonthStats(2026, 1, entries, 40);
+  }
+
+  it("rounds a fractional requirement up into whole rings", () => {
+    const s = august(5);
+    expect(s.requiredPoints).toBe(520);
+    // 5.2 days needs six rings drawn; the sixth is worth 0.2 of one.
+    expect(monthMeter(s)).toEqual({
+      slots: 6,
+      partialSlot: 20,
+      filled: 5,
+      extra: 0,
+    });
+  });
+
+  it("fills the part-worth ring with a whole stamp", () => {
+    const s = august(6);
+    expect(s.remainingPoints).toBe(0); // the sixth stamp settles the month
+    // partialSlot is the size of the obligation, not progress against it, so
+    // it does not move when a stamp lands on the ring.
+    expect(monthMeter(s)).toEqual({
+      slots: 6,
+      partialSlot: 20,
+      filled: 6,
+      extra: 0,
+    });
+  });
+
+  it("counts surplus in whole rings, never a fraction of one", () => {
+    const s = august(7);
+    expect(s.officeDays).toBe(7);
+    // The exact surplus is 7 − 5.2 = 1.8 days, which is what the old
+    // officeDays − requiredDays reported. `extra` counts rings past the row
+    // instead, and slots already rounded 5.2 up to 6 — so it says +1 and never
+    // promises more than the year will grant.
+    expect(monthMeter(s)).toEqual({
+      slots: 6,
+      partialSlot: 20,
+      filled: 6,
+      extra: 1,
+    });
+  });
+
+  it("draws no partial ring when the requirement is whole", () => {
+    // Jan 2026 has 22 weekdays; 2 on leave leaves 20, and 20 × 40% = 800
+    // points = exactly 8 days, so there is no remainder to draw short.
+    const s = january(20);
+    expect(s.requiredPoints).toBe(800);
+    expect(monthMeter(s)).toEqual({
+      slots: 8,
+      partialSlot: 0,
+      filled: 0,
+      extra: 0,
+    });
+  });
+
+  it("draws one part-worth ring for a requirement below a day", () => {
+    // 2 eligible days × 40% = 80 points = 0.8 of a day.
+    const s = january(2);
+    expect(s.requiredPoints).toBe(80);
+    expect(monthMeter(s)).toEqual({
+      slots: 1,
+      partialSlot: 80,
+      filled: 0,
+      extra: 0,
+    });
+    // One stamp fills that row outright, and the 0.2 of a day it over-serves
+    // is not a whole ring — so nothing is reported as extra.
+    expect(monthMeter(january(2, 1))).toEqual({
+      slots: 1,
+      partialSlot: 80,
+      filled: 1,
+      extra: 0,
+    });
+  });
+
+  it("draws no rings at all when nothing is required", () => {
+    const mandated: WfhMandate[] = [
+      { startDate: "2026-08-01", endDate: "2026-08-31" },
+    ];
+    // A mandate over the whole month: no eligible days, and the office stamp
+    // inside it is excluded, so no stamp can land either.
+    const s = computeMonthStats(
+      2026,
+      8,
+      { "2026-08-03": "office" },
+      40,
+      mandated
+    );
+    expect(s.requiredPoints).toBe(0);
+    expect(monthMeter(s)).toEqual({
+      slots: 0,
+      partialSlot: 0,
+      filled: 0,
+      extra: 0,
+    });
+  });
+
+  it("reports every stamp as extra against a zero requirement", () => {
+    // A 0% rate: the days stay eligible but weigh nothing, so all three stamps
+    // sit past a row with no rings in it.
+    const s = computeMonthStats(
+      2026,
+      1,
+      {
+        "2026-01-01": "office", // Thu
+        "2026-01-02": "office", // Fri
+        "2026-01-05": "office", // Mon
+      },
+      0
+    );
+    expect(s.requiredPoints).toBe(0);
+    expect(monthMeter(s)).toEqual({
+      slots: 0,
+      partialSlot: 0,
+      filled: 0,
+      extra: 3,
+    });
   });
 });
 

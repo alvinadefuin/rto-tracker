@@ -423,6 +423,43 @@ export function computeMonthStats(
   };
 }
 
+/** The four numbers the month's stamp-card meter is drawn from. */
+export interface MonthMeter {
+  slots: number; // whole rings; the requirement rounded up
+  partialSlot: number; // 0..99 — the last ring's worth, 0 when the requirement is whole
+  filled: number; // rings stamped
+  extra: number; // whole rings of surplus past the row
+}
+
+/**
+ * Ring counts for a month's stamp card.
+ *
+ * Lives here rather than in the component that draws it because Vitest runs
+ * without a DOM: arithmetic inside JSX cannot be asserted, so it would ship
+ * untested — the same reason fyVerdict's copy is in this file.
+ *
+ * Slots are whole rings: a requirement of 5.2 needs six, the last worth 0.2.
+ * Both come off `requiredPoints`, never the fractional sibling —
+ * Array.from({ length: 5.2 }) silently yields five rings, and (5.2 % 1) * 100
+ * is 20.000000000000018, which would go straight into the ring's gradient as a
+ * rendered string.
+ *
+ * `extra` counts whole rings past the row, not the exact surplus. Since
+ * `slots` rounds the requirement up, that can never overstate what the year
+ * will grant: a month over-served by 1.8 days reports +1, and the year settles
+ * the rest. Do not "fix" it into formatDays(officeDays * 100 − requiredPoints).
+ */
+export function monthMeter(stats: MonthStats): MonthMeter {
+  const { requiredPoints, officeDays } = stats;
+  const slots = Math.ceil(requiredPoints / 100);
+  return {
+    slots,
+    partialSlot: requiredPoints % 100,
+    filled: Math.min(officeDays, slots),
+    extra: Math.max(0, officeDays - slots),
+  };
+}
+
 export interface MonthsAggregate {
   officeDays: number;
   /**

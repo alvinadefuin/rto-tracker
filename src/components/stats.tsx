@@ -3,6 +3,7 @@ import {
   formatDays,
   formatMonth,
   fyVerdict,
+  monthMeter,
   type FyStats,
   type MonthStats,
 } from "@/lib/rto";
@@ -45,19 +46,9 @@ function MonthBlock({
     achievedPercent,
     mandatedDays,
   } = stats;
-  // Slots are whole rings: a requirement of 5.2 needs six, the last worth 0.2.
-  // Both come off the integer, never the float sibling — Array.from({length:
-  // 5.2}) silently yields five rings, and (5.2 % 1) * 100 is
-  // 20.000000000000018, which would go straight into the gradient below as a
-  // rendered string.
-  const slots = Math.ceil(requiredPoints / 100);
-  const partialSlot = requiredPoints % 100; // 0 when the requirement is whole
-  const filled = Math.min(officeDays, slots);
-  // Whole rings past the row, not the exact surplus. Since slots rounds the
-  // requirement up, this can never overstate what the year will grant: a month
-  // over-served by 1.8 days reports +1, and the year settles the rest. Do not
-  // "fix" it into formatDays(officeDays * 100 - requiredPoints).
-  const extra = Math.max(0, officeDays - slots);
+  // Derived in src/lib/rto.ts, where Vitest can assert it — not inline here,
+  // where it could not be. That file carries the reasoning behind each number.
+  const { slots, partialSlot, filled, extra } = monthMeter(stats);
 
   // Nothing was owed this month. Rendering zero rings and "0/0 stamped ·
   // target met · 0%" would read as a bug, so say why instead.
