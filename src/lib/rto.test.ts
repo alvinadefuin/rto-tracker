@@ -1359,3 +1359,30 @@ describe("computeMonthStats in percent-points", () => {
     expect(s.remainingPoints).toBe(0);
   });
 });
+
+describe("financial year still rounds exactly once", () => {
+  // Jan 2026 sits in FY2026, which runs Aug 2025 – Jul 2026, so the whole-year
+  // window starts there. The computeFyStats block's own `baseline` pins Aug
+  // 2026, which is past this FY's end.
+  const baseline = (prior: MonthsAggregate): FyBaseline => ({
+    windowStartMonth: "2025-08",
+    prior,
+  });
+
+  it("owes a whole day for a fractional year total", () => {
+    // Three months of 8.8 = 26.4 points-days. Summing monthly figures the old
+    // way (ceil each to 9) would owe 27.
+    const prior: MonthsAggregate = { officeDays: 0, weightedEligible: 1760 };
+    const month = computeMonthStats(2026, 1, {}, 40);
+    const fy = computeFyStats("2026-01", baseline(prior), month);
+    expect(month.requiredDays).toBe(8.8); // the month does not round
+    expect(fy.cumulativeRequired).toBe(27); // ceil(26.4) — the year does
+  });
+
+  it("derives the displayed month's contribution from its points", () => {
+    const prior: MonthsAggregate = { officeDays: 0, weightedEligible: 0 };
+    const month = computeMonthStats(2026, 1, {}, 40);
+    const fy = computeFyStats("2026-01", baseline(prior), month);
+    expect(fy.cumulativeRequired).toBe(9); // ceil(8.8), one month only
+  });
+});

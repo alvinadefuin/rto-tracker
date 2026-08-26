@@ -412,7 +412,7 @@ export function computeMonthStats(
 export interface MonthsAggregate {
   officeDays: number;
   /**
-   * Σ (eligibleDays × targetPercent) across the months, in percent-points and
+   * Σ of each month's `requiredPoints` across the months, in percent-points and
    * deliberately **un-rounded**. Dividing by 100 exactly once, at the end, in
    * computeFyStats is the whole point: it is what makes a 260-weekday year at
    * 40% owe 104 days rather than the ~110 that twelve monthly round-ups cost.
@@ -442,7 +442,7 @@ export function aggregateMonths(
     const percent = resolvePercent(monthKey, periods);
     const stats = computeMonthStats(year, month, entries, percent, mandates);
     officeDays += stats.officeDays;
-    weightedEligible += stats.eligibleDays * percent;
+    weightedEligible += stats.requiredPoints;
   }
   return { officeDays, weightedEligible };
 }
@@ -520,9 +520,7 @@ export function computeFyStats(
     financialYearBounds(fy);
 
   const cumulativeOffice = baseline.prior.officeDays + monthStats.officeDays;
-  const weighted =
-    baseline.prior.weightedEligible +
-    monthStats.eligibleDays * monthStats.targetPercent;
+  const weighted = baseline.prior.weightedEligible + monthStats.requiredPoints;
   const cumulativeRequired = Math.ceil(weighted / 100);
   const balance = cumulativeOffice - cumulativeRequired;
   return {
