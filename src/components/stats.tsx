@@ -53,9 +53,10 @@ function MonthBlock({
   const slots = Math.ceil(requiredPoints / 100);
   const partialSlot = requiredPoints % 100; // 0 when the requirement is whole
   const filled = Math.min(officeDays, slots);
-  // Whole rings past the row, not the exact surplus: this is the same figure
-  // computeFyStats calls balance, so the month's +N and the year's +N never
-  // disagree. Do not "fix" it into formatDays(officeDays * 100 - requiredPoints).
+  // Whole rings past the row, not the exact surplus. Since slots rounds the
+  // requirement up, this can never overstate what the year will grant: a month
+  // over-served by 1.8 days reports +1, and the year settles the rest. Do not
+  // "fix" it into formatDays(officeDays * 100 - requiredPoints).
   const extra = Math.max(0, officeDays - slots);
 
   // Nothing was owed this month. Rendering zero rings and "0/0 stamped ·

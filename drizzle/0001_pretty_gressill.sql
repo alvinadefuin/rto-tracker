@@ -1,1 +1,1 @@
-ALTER TYPE "public"."day_status" ADD VALUE 'training';
+ALTER TYPE "public"."day_status" ADD VALUE IF NOT EXISTS 'training';
