@@ -110,11 +110,12 @@ Eligible days = weekdays − mandated − holidays − leaves − training. Requ
 `eligible × targetPercent` in **integer percent-points**, held un-rounded:
 22 eligible at 40% is 880 points, i.e. 8.8 days, not 9. The employer states the
 month this way, and the fraction settles across the financial year rather than
-buying a whole office day every month. `MonthStats.requiredPoints` is
-authoritative; `requiredDays` is `requiredPoints / 100` for reading only, and
-`formatDays(points)` is what renders it. `remainingPoints === 0` is the
-target-met test — never compare the float siblings, because `5.2 - 5` is
-`0.20000000000000018`. The per-week Mon–Fri breakdown is informational — the
+buying a whole office day every month. `MonthStats` carries the requirement
+**only** as `requiredPoints` and `remainingPoints`; there is no day-valued
+sibling, so no comparison can accidentally be made in floats, where `5.2 - 5` is
+`0.20000000000000018`. `remainingPoints === 0` is the target-met test, and
+`formatDays(points)` is the one way points become a rendered string. The
+per-week Mon–Fri breakdown is informational — the
 requirement is computed per month and assessed across the financial year.
 
 **The target rate is per date range, not a constant.** `rto_targets` holds closed periods
@@ -144,8 +145,8 @@ boundary. `aggregateMonths` owns the per-month loop: it sums `eligibleDays × pe
 into `weightedEligible`, in **percent-points and deliberately un-rounded**.
 `computeFyStats` adds only the displayed month's own contribution to that already-summed
 baseline, then divides by 100 and rounds up exactly once for the year. Rounding per
-month instead costs about six office days a year, so never sum per-month
-`requiredDays`.
+month instead costs about six office days a year, so never round a month's
+`requiredPoints` to whole days and sum those.
 
 **The FY on screen follows the displayed month; the clock is read once, to choose the
 default month.** `financialYearOf` takes a month key for the same reason today's date is

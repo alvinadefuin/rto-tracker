@@ -51,15 +51,12 @@ stricter than the sum of its months.** A year totalling 19.8 still asks for 20,
 because a fifth of a day cannot be worked. "5.2 required this month" and a year
 demanding a whole extra day therefore coexist, by design. `fyVerdict` already
 treats the year as the number to act on, and its wording is unchanged — but one
-of its branches embeds the **month's** remaining figure, and it reads the float
-sibling. Against the pre-change code that was a live defect — `remainingNeeded`
-was `requiredDays − officeDays`, and `5.2 − 5` is `0.20000000000000018`. Once
-the field is redefined as `remainingPoints / 100` the residue is gone at the
-source, so switching the branch to `formatDays(remainingPoints)` with its
-singular keyed off `remainingPoints === 100` changes no output. Do it anyway:
-it is the rule above ("every comparison is integer") applied to the one place
-that still broke it, and the equivalence holds only by accident of how the
-field happens to be derived today.
+of its branches embeds the **month's** remaining figure, and it reads a float.
+Against the pre-change code that was a live defect — the month's shortfall was
+`requiredDays − officeDays`, and `5.2 − 5` is `0.20000000000000018`. The branch
+switches to `formatDays(remainingPoints)`, with its singular keyed off
+`remainingPoints === 100`: the rule above ("every comparison is integer")
+applied to the one place that still broke it.
 
 **Training gets its own status** rather than reusing `leave`. The two are
 computationally identical — both leave the day out of the eligible base — so the
@@ -83,20 +80,19 @@ This is not stylistic. `5.2 - 5` evaluates to `0.20000000000000018` in binary
 floating point, so a float requirement makes the "target met" test unreliable at
 exactly the boundary it exists to detect.
 
-**Every comparison is integer. `target met` is `remainingPoints === 0`, never
-`officeDays >= requiredDays`.**
+**Every comparison is integer. `target met` is `remainingPoints === 0`, never a
+float comparison of days.**
 
-`MonthStats` gains `requiredPoints` as the source of truth and keeps
-`requiredDays`, now the derived exact fraction:
+`MonthStats` holds the requirement as points and nothing else. The old
+day-valued `requiredDays` and `remainingNeeded` are **removed**, not kept
+alongside:
 
 ```ts
 export interface MonthStats {
   eligibleDays: number;
   officeDays: number;
   requiredPoints: number;   // eligibleDays × targetPercent, integer, un-rounded
-  requiredDays: number;     // requiredPoints / 100 — the readable figure, 5.2
   remainingPoints: number;  // integer, exact; 0 means met
-  remainingNeeded: number;  // remainingPoints / 100
   targetPercent: number;
   achievedPercent: number;
   mandatedDays: number;
@@ -104,12 +100,14 @@ export interface MonthStats {
 }
 ```
 
-The `*Points` field of each pair is authoritative: every comparison and every
-rendered string derives from it. The float sibling is kept because it is the
-quantity a human means by "how many days do I owe", and because `requiredDays`
-is the name the codebase and its 134 tests already use — but nothing in the
-rendering path reads it. A future consumer that needs to compare or format one
-of these should reach for the points field.
+Day-valued siblings were drafted and dropped. They read well — "how many days do
+I owe" is the human quantity — but nothing outside the tests would have consumed
+them, and as plain `number`s they left `stats.requiredDays - stats.officeDays`
+type-checking, which is exactly the float arithmetic this design exists to
+remove. With only the points fields present that expression is a compile error,
+and the name no longer collides with `FyStats.remainingNeeded`, which is the
+year's shortfall in whole days. Anything that needs to compare reaches for the
+points; anything that needs to display calls `formatDays`.
 
 `aggregateMonths` and `computeFyStats` consume `requiredPoints` instead of
 recomputing `eligibleDays * targetPercent` inline, so the expression has one
@@ -176,8 +174,9 @@ are rendered by one pure formatter in `rto.ts`:
 export function formatDays(points: number): string
 ```
 
-Called as `formatDays(requiredPoints)` and `formatDays(remainingPoints)`, never
-on `requiredDays` or `remainingNeeded`, so no float reaches the screen.
+Called as `formatDays(requiredPoints)` and `formatDays(remainingPoints)` — the
+only day-valued form of either number, and a string, so no float reaches the
+screen.
 `520 → "5.2"`, `800 → "8"`, `429 → "4.29"`. Trailing zeros trimmed, no rounding — `targetPercent` and `eligibleDays` are both whole, so
 points/100 is always exact to two decimals. It lives in `rto.ts` rather than the
 component because Vitest runs in a `node` environment, where JSX cannot be
@@ -197,7 +196,7 @@ A deleted assertion is lost coverage; a rewritten one records the new rule.
 New coverage:
 
 - August 2026 end to end — 21 weekdays, 2 holidays, a 6-day mandate, 13
-  eligible, `requiredPoints === 520`, `requiredDays === 5.2`.
+  eligible, `requiredPoints === 520`, `formatDays(requiredPoints) === "5.2"`.
 - `remainingPoints === 0` exactly at the boundary, and the float hazard: 13
   eligible at 40% with 5 office days must report `0.2 to go`, and with 6 must
   report met.

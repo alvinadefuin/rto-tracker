@@ -61,8 +61,9 @@ describe("computeMonthStats", () => {
     const s = computeMonthStats(2026, 1, {});
     expect(s.eligibleDays).toBe(22);
     expect(s.officeDays).toBe(0);
-    expect(s.requiredDays).toBe(8.8);
-    expect(s.remainingNeeded).toBe(8.8);
+    expect(s.requiredPoints).toBe(22 * 40);
+    expect(formatDays(s.requiredPoints)).toBe("8.8");
+    expect(formatDays(s.remainingPoints)).toBe("8.8");
     expect(s.achievedPercent).toBe(0);
   });
 
@@ -72,7 +73,7 @@ describe("computeMonthStats", () => {
       "2026-01-02": "leave",
     });
     expect(s.eligibleDays).toBe(20);
-    expect(s.requiredDays).toBe(8); // 20 × 40% = 8 exactly
+    expect(s.requiredPoints).toBe(20 * 40); // 20 × 40% = 8 days exactly
   });
 
   it("office days count toward percent", () => {
@@ -82,7 +83,7 @@ describe("computeMonthStats", () => {
     });
     expect(s.officeDays).toBe(2);
     expect(s.achievedPercent).toBe(9); // round(9.09)
-    expect(s.remainingNeeded).toBe(6.8);
+    expect(formatDays(s.remainingPoints)).toBe("6.8");
   });
 
   it("ignores weekend entries defensively", () => {
@@ -109,7 +110,7 @@ describe("computeMonthStats", () => {
     for (const d of monthWeekdays(2026, 1)) entries[d] = "leave";
     const s = computeMonthStats(2026, 1, entries);
     expect(s.eligibleDays).toBe(0);
-    expect(s.requiredDays).toBe(0);
+    expect(s.requiredPoints).toBe(0);
     expect(s.achievedPercent).toBe(0); // no divide-by-zero
   });
 });
@@ -269,20 +270,20 @@ describe("computeMonthStats target rate", () => {
   it("defaults to the 40% requirement", () => {
     const s = computeMonthStats(2026, 1, {});
     expect(s.targetPercent).toBe(DEFAULT_RTO_PERCENT);
-    expect(s.requiredDays).toBe(8.8);
+    expect(formatDays(s.requiredPoints)).toBe("8.8");
   });
 
   it("applies an explicit reduced rate", () => {
     const s = computeMonthStats(2026, 1, {}, 20);
     expect(s.targetPercent).toBe(20);
-    expect(s.requiredDays).toBe(4.4);
-    expect(s.remainingNeeded).toBe(4.4);
+    expect(formatDays(s.requiredPoints)).toBe("4.4");
+    expect(formatDays(s.remainingPoints)).toBe("4.4");
   });
 
   it("treats a 0% rate as no requirement", () => {
     const s = computeMonthStats(2026, 1, {}, 0);
-    expect(s.requiredDays).toBe(0);
-    expect(s.remainingNeeded).toBe(0);
+    expect(s.requiredPoints).toBe(0);
+    expect(s.remainingPoints).toBe(0);
   });
 
   it("reports achievedPercent as a whole number", () => {
@@ -565,7 +566,7 @@ describe("computeMonthStats with mandates", () => {
   it("scores an unmandated August at full strength", () => {
     const s = computeMonthStats(2026, 8, {});
     expect(s.eligibleDays).toBe(21);
-    expect(s.requiredDays).toBe(8.4);
+    expect(formatDays(s.requiredPoints)).toBe("8.4");
     expect(s.mandatedDays).toBe(0);
   });
 
@@ -573,8 +574,8 @@ describe("computeMonthStats with mandates", () => {
     const s = computeMonthStats(2026, 8, {}, DEFAULT_RTO_PERCENT, fromAug12);
     expect(s.eligibleDays).toBe(7);
     expect(s.mandatedDays).toBe(14);
-    expect(s.requiredDays).toBe(2.8);
-    expect(s.remainingNeeded).toBe(2.8);
+    expect(formatDays(s.requiredPoints)).toBe("2.8");
+    expect(formatDays(s.remainingPoints)).toBe("2.8");
   });
 
   it("counts office days before the mandate normally", () => {
@@ -586,7 +587,7 @@ describe("computeMonthStats with mandates", () => {
       fromAug12
     );
     expect(s.officeDays).toBe(2);
-    expect(s.remainingNeeded).toBe(0.8);
+    expect(formatDays(s.remainingPoints)).toBe("0.8");
     expect(s.achievedPercent).toBe(29); // round(2/7 * 100)
   });
 
@@ -596,8 +597,8 @@ describe("computeMonthStats with mandates", () => {
     ];
     const s = computeMonthStats(2026, 9, {}, DEFAULT_RTO_PERCENT, all);
     expect(s.eligibleDays).toBe(0);
-    expect(s.requiredDays).toBe(0);
-    expect(s.remainingNeeded).toBe(0);
+    expect(s.requiredPoints).toBe(0);
+    expect(s.remainingPoints).toBe(0);
     expect(s.achievedPercent).toBe(0);
     expect(s.mandatedDays).toBe(22); // Sep 2026 weekdays
   });
@@ -665,7 +666,7 @@ describe("computeMonthStats with mandates", () => {
     );
     expect(s.mandatedDays).toBe(3);
     expect(s.eligibleDays).toBe(18);
-    expect(s.requiredDays).toBe(7.2);
+    expect(formatDays(s.requiredPoints)).toBe("7.2");
     expect(s.officeDays).toBe(1); // Mon 17 is past the mandate, so it counts
   });
 
@@ -1006,7 +1007,7 @@ describe("computeFyStats", () => {
     // Jul 2027 has 22 weekdays and nothing stamped.
     const july = computeMonthStats(2027, 7, {}, 40);
     const fy = computeFyStats("2027-07", baseline(prior), july);
-    expect(july.requiredDays).toBe(8.8); // the month alone asks for 8.8
+    expect(formatDays(july.requiredPoints)).toBe("8.8"); // the month alone asks for 8.8
     expect(fy.cumulativeRequired).toBe(20); // 1100 + 880 = 1980 -> ceil 19.8
     expect(fy.cumulativeOffice).toBe(20);
     expect(fy.balance).toBe(0);
@@ -1087,17 +1088,16 @@ describe("fyVerdict", () => {
     };
   }
 
-  // Only the remaining figures are read; the rest is filler to make a whole
-  // MonthStats. Points and days are kept consistent so the fixture cannot
-  // describe a month that computeMonthStats could never produce.
+  // Only the remaining figure is read; the rest is filler to make a whole
+  // MonthStats. officeDays and remainingPoints are kept consistent with
+  // requiredPoints so the fixture cannot describe a month that
+  // computeMonthStats could never produce.
   function month(remainingDays: number): MonthStats {
     return {
       eligibleDays: 22,
       officeDays: 11 - remainingDays,
       requiredPoints: 1100,
-      requiredDays: 11,
       remainingPoints: remainingDays * 100,
-      remainingNeeded: remainingDays,
       targetPercent: 50,
       achievedPercent: 0,
       mandatedDays: 0,
@@ -1270,9 +1270,7 @@ describe("fyVerdict", () => {
       eligibleDays: 13,
       officeDays: 5,
       requiredPoints: 520,
-      requiredDays: 5.2,
       remainingPoints: 20,
-      remainingNeeded: 0.2,
       targetPercent: 40,
       achievedPercent: 38,
       mandatedDays: 6,
@@ -1345,7 +1343,7 @@ describe("computeMonthStats in percent-points", () => {
     const s = computeMonthStats(2026, 8, holidays, 40, mandate);
     expect(s.eligibleDays).toBe(13);
     expect(s.requiredPoints).toBe(520);
-    expect(s.requiredDays).toBe(5.2);
+    expect(formatDays(s.requiredPoints)).toBe("5.2");
   });
 
   it("reports the shortfall exactly, in points", () => {
@@ -1461,8 +1459,8 @@ describe("monthMeter", () => {
   it("counts surplus in whole rings, never a fraction of one", () => {
     const s = august(7);
     expect(s.officeDays).toBe(7);
-    // The exact surplus is 7 − 5.2 = 1.8 days, which is what the old
-    // officeDays − requiredDays reported. `extra` counts rings past the row
+    // The exact surplus is 7 − 5.2 = 1.8 days, which is what a float
+    // officeDays − required subtraction reported. `extra` counts rings past the row
     // instead, and slots already rounded 5.2 up to 6 — so it says +1 and never
     // promises more than the year will grant.
     expect(monthMeter(s)).toEqual({
@@ -1579,7 +1577,7 @@ describe("financial year still rounds exactly once", () => {
     const fy = computeFyStats("2026-01", baseline(prior), month);
 
     expect(month.requiredPoints).toBe(520);
-    expect(month.requiredDays).toBe(5.2); // the month does not round
+    expect(formatDays(month.requiredPoints)).toBe("5.2"); // the month does not round
     expect(fy.cumulativeRequired).toBe(11); // ceil(10.4) — the year does, once
 
     const monthlySum = 2 * Math.ceil(520 / 100);
@@ -1717,7 +1715,7 @@ describe("training days", () => {
       "2026-01-05": "training",
     });
     expect(s.eligibleDays).toBe(19);
-    expect(s.requiredDays).toBe(7.6);
+    expect(formatDays(s.requiredPoints)).toBe("7.6");
   });
 });
 

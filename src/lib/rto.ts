@@ -13,14 +13,19 @@ export interface MonthStats {
   officeDays: number;
   /**
    * eligibleDays × targetPercent, in integer percent-points and deliberately
-   * un-rounded. Authoritative: every comparison and every rendered string
-   * derives from this, not from the fractional sibling below.
+   * un-rounded. A point is a hundredth of an office day, so 13 eligible at 40%
+   * is 520 points — 5.2 days. Points rather than days because `5.2 - 5` is
+   * `0.20000000000000018`, which makes a float unreliable at exactly the
+   * boundary the target-met test exists to detect. `formatDays` is the only
+   * way one of these becomes a rendered string.
    */
   requiredPoints: number;
-  requiredDays: number; // requiredPoints / 100 — the readable figure, e.g. 5.2
-  /** max(0, requiredPoints − officeDays × 100). Exact; 0 means the month is met. */
+  /**
+   * max(0, requiredPoints − officeDays × 100). Exact, so `=== 0` *is* the
+   * target-met test. The month never rounds; the year rounds up once, in
+   * computeFyStats.
+   */
   remainingPoints: number;
-  remainingNeeded: number; // remainingPoints / 100
   targetPercent: number; // whole percent required this month, e.g. 20
   achievedPercent: number; // whole percent achieved, 0 when eligibleDays === 0
   mandatedDays: number; // mandated weekdays in the month, excluded from eligible
@@ -412,9 +417,7 @@ export function computeMonthStats(
     eligibleDays,
     officeDays,
     requiredPoints,
-    requiredDays: requiredPoints / 100,
     remainingPoints,
-    remainingNeeded: remainingPoints / 100,
     targetPercent,
     achievedPercent:
       eligibleDays === 0 ? 0 : Math.round((officeDays / eligibleDays) * 100),
@@ -594,10 +597,11 @@ const plural = (n: number, one: string, many: string) =>
 /**
  * The one sentence saying what the financial year still owes.
  *
- * Takes the whole `MonthStats` rather than its `remainingNeeded` number: the
- * month's shortfall and the year's are different quantities, and passing
- * `fy.remainingNeeded` by mistake would type-check while producing a plausible
- * wrong sentence. `FyStats` is not assignable to `MonthStats`, so it cannot.
+ * Takes the whole `MonthStats` rather than its `remainingPoints` number: the
+ * month's shortfall and the year's are different quantities in different units,
+ * and a bare-number parameter would take `fy.remainingNeeded` — whole days —
+ * without complaint and print a plausible wrong sentence. `FyStats` is not
+ * assignable to `MonthStats`, so it cannot.
  *
  * Copy lives here rather than in the component because Vitest runs without a
  * DOM: eight branches are worth asserting, and in JSX they could not be.

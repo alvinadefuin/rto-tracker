@@ -32,6 +32,8 @@ remainingPoints  = max(0, requiredPoints − officeDays × 100)
 Points rather than a float because `5.2 - 5` is `0.20000000000000018`: a float
 comparison is unreliable at exactly the boundary the test exists to detect. The float
 siblings are display values, and `formatDays(points)` renders them.
+**Amended before merge** (2026-08-26): the two float siblings were deleted; see the
+Consequences bullet below.
 
 Also decided: **`training` joins the `day_status` enum**, excluded from the eligible
 base exactly as `leave` is. It is computationally identical to leave — the separate
@@ -62,6 +64,14 @@ Rejected alternatives:
 - `requiredPoints` and `requiredDays` sit side by side in `MonthStats`, which invites
   comparing the wrong one. The comment on `remainingPoints` says which is exact, and no
   caller should compute a verdict from `requiredDays`.
+  **Amended before merge** (2026-08-26): `requiredDays` and `remainingNeeded` were
+  deleted rather than documented. Code review found they had no consumer outside the
+  tests — every rendered string already came through `formatDays(points)` — so the
+  invitation was pure cost. Deleting them lets the compiler enforce what the comment
+  was asking for: `stats.requiredDays - stats.officeDays` used to type-check and
+  silently reintroduce the float arithmetic this ADR removes, and is now an error. It
+  also retires a name collision, since `FyStats.remainingNeeded` is a different
+  quantity — the year's shortfall in whole days.
 - The FY aggregate got simpler, not harder: `aggregateMonths` already summed
   `eligibleDays × percent` in un-rounded percent-points, so it now sums each month's own
   `requiredPoints` and the two paths cannot drift apart.
