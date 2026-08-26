@@ -19,7 +19,7 @@ Auth.js standard tables (`users`, `accounts`, `sessions`, `verification_tokens`)
 day_entries
   user_id  text  → users.id (cascade delete)
   date     text  'YYYY-MM-DD'
-  status   enum  'office' | 'leave' | 'holiday'
+  status   enum  'office' | 'leave' | 'holiday' | 'training'
   PRIMARY KEY (user_id, date)
 ```
 
@@ -30,11 +30,14 @@ day_entries
 All in `src/lib/rto.ts` as pure functions over `YYYY-MM-DD` strings (no Date
 parsing of strings — UTC component math only, to avoid timezone drift).
 
-- Eligible working days in a month = weekdays − mandated WFH − holidays − leaves
+- Eligible working days in a month =
+  weekdays − mandated WFH − holidays − leaves − training
 - Mandated WFH days come from `wfh_mandates` day ranges, not from `day_entries`, and
   take precedence over any recorded status
-- Required office days = `ceil(eligible × targetPercent / 100)`, where `targetPercent`
-  comes from `rto_targets` for that month, defaulting to 40
+- Required office days = `eligible × targetPercent` in integer percent-points,
+  **un-rounded** — 13 eligible at 40% is 520 points, i.e. 5.2 days. `targetPercent`
+  comes from `rto_targets` for that month, defaulting to 40. The month never rounds;
+  the financial year rounds up once (see below)
 - RTO % = office ÷ eligible (0 when eligible is 0)
 - Weekly breakdown: Mon–Fri chunks, partial chunks at month edges — informational
   only. The requirement is computed per month and assessed across the financial year
@@ -51,8 +54,8 @@ parsing of strings — UTC component math only, to avoid timezone drift).
 
 Server component (`page.tsx`) authenticates via `auth()`, queries the month's
 entries for the session user, computes stats, renders. The calendar is a client
-component: tapping a weekday cycles WFH → Office → Leave → Holiday → WFH,
-updates optimistically, and persists via the `setDayStatus` server action
+component: tapping a weekday cycles WFH → Office → Leave → Holiday → Training →
+WFH, updates optimistically, and persists via the `setDayStatus` server action
 (upsert, or delete when cycling back to WFH). On failure the cell reverts and a
 toast is shown.
 

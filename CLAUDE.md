@@ -103,14 +103,19 @@ reasons about calendar days, never instants. `src/lib/rto.ts` does UTC component
 `date` column or a local-time parse reintroduces off-by-one bugs across the whole app.
 
 **Absence of a row on a weekday means WFH.** There is no `wfh` status; the enum is
-`office | leave | holiday`. Weekends are never stored, and `setDayStatus` rejects them.
-Cycling a day back to WFH deletes the row.
+`office | leave | holiday | training`. Weekends are never stored, and `setDayStatus`
+rejects them. Cycling a day back to WFH deletes the row.
 
-Eligible days = weekdays − mandated − holidays − leaves. Required =
-`ceil(eligible × targetPercent / 100)`
-(rounds up deliberately: 22 eligible at 40% → 9, since 8 would be 36%). The per-week
-Mon–Fri breakdown is informational — the requirement is computed per month and assessed
-across the financial year.
+Eligible days = weekdays − mandated − holidays − leaves − training. Required =
+`eligible × targetPercent` in **integer percent-points**, held un-rounded:
+22 eligible at 40% is 880 points, i.e. 8.8 days, not 9. The employer states the
+month this way, and the fraction settles across the financial year rather than
+buying a whole office day every month. `MonthStats.requiredPoints` is
+authoritative; `requiredDays` is `requiredPoints / 100` for reading only, and
+`formatDays(points)` is what renders it. `remainingPoints === 0` is the
+target-met test — never compare the float siblings, because `5.2 - 5` is
+`0.20000000000000018`. The per-week Mon–Fri breakdown is informational — the
+requirement is computed per month and assessed across the financial year.
 
 **The target rate is per date range, not a constant.** `rto_targets` holds closed periods
 (`start_month`, `end_month`, `percent`) per user; `end_month` NULL means ongoing. Months
@@ -176,11 +181,11 @@ changes, and Calendar seeds its state from `initialEntries` only on mount — so
 key, sliding months keeps the previous month's entries and the new month renders blank.
 
 `src/components/calendar.tsx` (client) owns the interaction: tapping a weekday cycles
-`null → office → leave → holiday → null`, updates local state optimistically, and calls the
-`setDayStatus` server action. On rejection it reverts that cell and shows a toast. The
-displayed month is never refetched mid-edit, so **the client recomputes stats from local
-state** with the same `computeMonthStats` the server would use. Keep that function pure and
-isomorphic.
+`null → office → leave → holiday → training → null`, updates local state optimistically,
+and calls the `setDayStatus` server action. On rejection it reverts that cell and shows a
+toast. The displayed month is never refetched mid-edit, so **the client recomputes stats
+from local state** with the same `computeMonthStats` the server would use. Keep that
+function pure and isomorphic.
 
 `src/app/actions.ts` re-validates everything server-side (session, date shape, weekend,
 status) — the client is not trusted. It upserts on the `(user_id, date)` primary key, or
@@ -196,6 +201,7 @@ snapshot, so SSR output stays timezone-independent.
 
 - `@/*` maps to `src/*` (tsconfig and vitest both).
 - Tailwind v4: the palette and fonts are CSS variables in the `@theme` block of
-  `src/app/globals.css` (`paper`, `ink`, `rule`, `stamp`, `leave`, `holiday`, `fade`).
-  There is no `tailwind.config.*` — add design tokens there, not in a config file.
+  `src/app/globals.css` (`paper`, `ink`, `rule`, `stamp`, `leave`, `holiday`, `training`,
+  `fade`). There is no `tailwind.config.*` — add design tokens there, not in a config
+  file.
 - Vitest runs in a `node` environment; only `src/lib/rto.ts` (pure logic) is unit-tested.
