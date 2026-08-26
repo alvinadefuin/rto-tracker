@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatImportSummary,
   parseHolidayIcs,
   planHolidayImport,
   type ImportedHoliday,
@@ -323,5 +324,59 @@ describe("planHolidayImport", () => {
     expect(
       planHolidayImport([], FY2027_START, FY2027_END, [], null)
     ).toEqual({ toInsert: [], alreadyMarked: 0, beforeRecord: 0 });
+  });
+});
+
+describe("formatImportSummary", () => {
+  it("reports a clean run with one clause", () => {
+    expect(
+      formatImportSummary({
+        toInsert: [NINOY, HEROES],
+        alreadyMarked: 0,
+        beforeRecord: 0,
+      })
+    ).toBe("2 marked");
+  });
+
+  it("adds a clause for days already marked", () => {
+    expect(
+      formatImportSummary({
+        toInsert: [NINOY],
+        alreadyMarked: 3,
+        beforeRecord: 0,
+      })
+    ).toBe("1 marked · 3 already marked");
+  });
+
+  it("adds a clause for days before the record starts", () => {
+    expect(
+      formatImportSummary({
+        toInsert: [NINOY],
+        alreadyMarked: 0,
+        beforeRecord: 5,
+      })
+    ).toBe("1 marked · 5 before your record starts");
+  });
+
+  it("joins all three clauses", () => {
+    expect(
+      formatImportSummary({
+        toInsert: [NINOY],
+        alreadyMarked: 3,
+        beforeRecord: 5,
+      })
+    ).toBe("1 marked · 3 already marked · 5 before your record starts");
+  });
+
+  // A re-run of a year already imported. Reads better than "nothing to do":
+  // it says the year is covered.
+  it("reports a fully covered year as zero marked", () => {
+    expect(
+      formatImportSummary({
+        toInsert: [],
+        alreadyMarked: 18,
+        beforeRecord: 0,
+      })
+    ).toBe("0 marked · 18 already marked");
   });
 });

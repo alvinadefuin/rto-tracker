@@ -234,6 +234,18 @@ export function formatPeriodRange(period: TargetPeriod): string {
   return `${formatMonth(period.startMonth)} – ${end}`;
 }
 
+/**
+ * "FY2027 (Aug 2026 – Jul 2027)".
+ *
+ * The span is spelled out because "FY2027" alone is ambiguous to anyone who has
+ * not internalised an August start. Both the holiday-import picker and that
+ * action's out-of-range error use this, so the two cannot disagree.
+ */
+export function formatFinancialYear(fy: number): string {
+  const { startMonth, endMonth } = financialYearBounds(fy);
+  return `FY${fy} (${formatMonth(startMonth)} – ${formatMonth(endMonth)})`;
+}
+
 /** "2026-08-12" → "12 Aug 2026". */
 export function formatDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);

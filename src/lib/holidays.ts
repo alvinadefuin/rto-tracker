@@ -156,3 +156,22 @@ export function planHolidayImport(
 
   return { toInsert, alreadyMarked, beforeRecord };
 }
+
+/**
+ * The one line the import reports back.
+ *
+ * Zero-valued clauses are omitted, but the marked count always shows — "0
+ * marked · 18 already marked" is how a re-run of a finished year reads, and it
+ * says more than "nothing to do" would. There is no all-zero case: the action
+ * reports a range error before it gets here when nothing landed in range.
+ */
+export function formatImportSummary(plan: ImportPlan): string {
+  const parts = [`${plan.toInsert.length} marked`];
+  if (plan.alreadyMarked > 0) {
+    parts.push(`${plan.alreadyMarked} already marked`);
+  }
+  if (plan.beforeRecord > 0) {
+    parts.push(`${plan.beforeRecord} before your record starts`);
+  }
+  return parts.join(" · ");
+}

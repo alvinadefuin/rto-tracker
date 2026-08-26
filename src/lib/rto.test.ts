@@ -9,6 +9,7 @@ import {
   countWeekdaysInMandate,
   formatMonth,
   formatPeriodRange,
+  formatFinancialYear,
   formatDate,
   formatMandateRange,
   isValidDateKey,
@@ -1255,5 +1256,15 @@ describe("fyVerdict", () => {
         month(1)
       )
     ).toBe("1 office day short of FY2027's full year.");
+  });
+});
+
+describe("formatFinancialYear", () => {
+  it("names the year and spells out its Aug–Jul span", () => {
+    expect(formatFinancialYear(2027)).toBe("FY2027 (Aug 2026 – Jul 2027)");
+  });
+
+  it("works for the year the record began", () => {
+    expect(formatFinancialYear(2026)).toBe("FY2026 (Aug 2025 – Jul 2026)");
   });
 });
