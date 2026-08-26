@@ -51,10 +51,15 @@ stricter than the sum of its months.** A year totalling 19.8 still asks for 20,
 because a fifth of a day cannot be worked. "5.2 required this month" and a year
 demanding a whole extra day therefore coexist, by design. `fyVerdict` already
 treats the year as the number to act on, and its wording is unchanged — but one
-of its branches embeds the **month's** remaining figure. That number must come
-from `formatDays(remainingPoints)`, and its singular must key off
-`remainingPoints === 100`, or the sentence renders "0.20000000000000018
-remaining days are covered".
+of its branches embeds the **month's** remaining figure, and it reads the float
+sibling. Against the pre-change code that was a live defect — `remainingNeeded`
+was `requiredDays − officeDays`, and `5.2 − 5` is `0.20000000000000018`. Once
+the field is redefined as `remainingPoints / 100` the residue is gone at the
+source, so switching the branch to `formatDays(remainingPoints)` with its
+singular keyed off `remainingPoints === 100` changes no output. Do it anyway:
+it is the rule above ("every comparison is integer") applied to the one place
+that still broke it, and the equivalence holds only by accident of how the
+field happens to be derived today.
 
 **Training gets its own status** rather than reusing `leave`. The two are
 computationally identical — both leave the day out of the eligible base — so the

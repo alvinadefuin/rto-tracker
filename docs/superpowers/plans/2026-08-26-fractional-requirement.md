@@ -417,7 +417,9 @@ git commit -m "refactor: sum the year from the month's own points"
 
 ### Task 4: A fractional figure in the FY verdict sentence
 
-`fyVerdict` embeds the **month's** remaining figure inside one branch. Left alone it renders `0.20000000000000018 remaining days are covered`.
+`fyVerdict` embeds the **month's** remaining figure inside one branch, reading the float sibling `remainingNeeded`.
+
+Expect this to be **green on arrival**, not red. Against the original code the branch really did render `0.20000000000000018 remaining days are covered`, because `remainingNeeded` was `requiredDays − officeDays`. Task 2 redefines it as `remainingPoints / 100`, which stringifies as `"0.2"`, so the residue is already gone by the time this task runs. The change is invariant enforcement — no float backing a comparison or a rendered string — plus two characterisation tests. Do not treat a passing Step 2 as a reason to skip it.
 
 **Files:**
 - Modify: `src/lib/rto.ts`
@@ -471,7 +473,7 @@ not see it.
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run src/lib/rto.test.ts -t "part-day shortfall"`
-Expected: FAIL — it produces `0.20000000000000018 remaining days are covered`.
+Expected: **PASS** — see the note above. Task 2 already removed the residue at the source. This is a characterisation test, not a red one.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -963,6 +965,127 @@ git commit -m "test: reproduce the Aug 2026 RTO email end to end"
 
 ---
 
+---
+
+### Task 10: The documentation the change contradicts
+
+Added after a code review found that the plan shipped a reversal of a recorded decision without touching a single document. `CLAUDE.md` is the file every agent reads first; leaving it stating the opposite of what the code does is the most expensive defect in this branch.
+
+**Files:**
+- Modify: `CLAUDE.md:106`, `CLAUDE.md:109-110`
+- Modify: `docs/architecture.md:33`, `docs/architecture.md:36`
+- Modify: `docs/decisions/0001-stack.md:23-24`
+- Create: `docs/decisions/0006-fractional-monthly-requirement.md`
+
+- [ ] **Step 1: `CLAUDE.md` — the status enum**
+
+Replace:
+
+```
+`office | leave | holiday`. Weekends are never stored, and `setDayStatus` rejects them.
+```
+
+with:
+
+```
+`office | leave | holiday | training`. Weekends are never stored, and `setDayStatus`
+rejects them.
+```
+
+- [ ] **Step 2: `CLAUDE.md` — the requirement formula**
+
+Replace:
+
+```
+Eligible days = weekdays − mandated − holidays − leaves. Required =
+`ceil(eligible × targetPercent / 100)`
+(rounds up deliberately: 22 eligible at 40% → 9, since 8 would be 36%). The per-week
+```
+
+with:
+
+```
+Eligible days = weekdays − mandated − holidays − leaves − training. Required =
+`eligible × targetPercent` in **integer percent-points**, held un-rounded:
+22 eligible at 40% is 880 points, i.e. 8.8 days, not 9. The employer states the
+month this way, and the fraction settles across the financial year rather than
+buying a whole office day every month. `MonthStats.requiredPoints` is
+authoritative; `requiredDays` is `requiredPoints / 100` for reading only, and
+`formatDays(points)` is what renders it. `remainingPoints === 0` is the
+target-met test — never compare the float siblings, because `5.2 - 5` is
+`0.20000000000000018`. The per-week
+```
+
+- [ ] **Step 3: `docs/architecture.md`**
+
+Replace `- Eligible working days in a month = weekdays − mandated WFH − holidays − leaves` with the same line ending `− leaves − training`.
+
+Replace:
+
+```
+- Required office days = `ceil(eligible × targetPercent / 100)`, where `targetPercent`
+  comes from `rto_targets` for that month, defaulting to 40
+```
+
+with:
+
+```
+- Required office days = `eligible × targetPercent` in integer percent-points,
+  **un-rounded** — 13 eligible at 40% is 520 points, i.e. 5.2 days. `targetPercent`
+  comes from `rto_targets` for that month, defaulting to 40. The month never rounds;
+  the financial year rounds up once (see below)
+```
+
+Leave line 43 (the FY formula) alone — it is still correct.
+
+- [ ] **Step 4: Mark ADR 0001 decision 5 superseded**
+
+Replace:
+
+```
+5. **40% target rounds up** (`ceil`): 22 eligible days → 9 required, since 8
+   days would be 36%, below the requirement.
+```
+
+with:
+
+```
+5. **40% target rounds up** (`ceil`): 22 eligible days → 9 required, since 8
+   days would be 36%, below the requirement.
+   **Superseded by ADR 0006** (2026-08-26): the employer states the month
+   un-rounded, so the month now carries its fraction and only the financial
+   year rounds.
+```
+
+- [ ] **Step 5: Write ADR 0006**
+
+Create `docs/decisions/0006-fractional-monthly-requirement.md`. Match the house style of `0005-financial-year-carryover.md` — Context, Decision, then what was rejected and why. Content to record:
+
+- **Context.** An employer email spelled out the computation: 21 working days, less holidays → 19, less a 6-day incident exclusion → 13 available, `13 × 40% = 5.2 days` required, further reduced by leave and training days. The app rounded the month up with `ceil`, asking 6 where 5.2 is asked. ADR 0001 decision 5 had recorded that rounding as deliberate.
+- **Decision.** The month holds its requirement as integer percent-points (`eligibleDays × targetPercent`) and never rounds. The financial year keeps its single `ceil`, so a fraction settles across the year instead of buying a whole day each month. Points rather than a float because `5.2 - 5` is `0.20000000000000018`, which makes a float "target met" test unreliable at the boundary it exists to detect.
+- **Consequence worth stating.** The year is stricter than the sum of its months — a year totalling 19.8 still asks for 20, because a fifth of a day cannot be worked. "5.2 required this month" and a year demanding a whole extra day coexist by design.
+- **Also decided.** `training` joins the `day_status` enum. It is computationally identical to `leave` — both leave the day out of the eligible base — so the separate status buys record-keeping only. That is the point: the record should say what the day was.
+- **Rejected: rounding down.** 5 office days out of 13 is 38.5%, below the stated 40%. The fraction carries to the year rather than being forgiven.
+- **Rejected: reusing `leave` for training.** Zero migration and identical maths, but the record then cannot distinguish time off from a training day.
+
+- [ ] **Step 6: Verify no stale claim survives**
+
+Run: `grep -rn "ceil(eligible\|rounds up deliberately\|office | leave | holiday" CLAUDE.md docs/architecture.md docs/decisions/`
+
+Expected: the only `ceil` hits are the FY ones (`CLAUDE.md:141`, `CLAUDE.md:159`, `docs/architecture.md:43`, ADR 0005) and the superseded-and-labelled line in ADR 0001. No unqualified claim that the month rounds up.
+
+`docs/plans/**` and `docs/superpowers/**` are historical artifacts — leave them alone.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add CLAUDE.md docs/architecture.md docs/decisions/
+git commit -m "docs: record that the month no longer rounds up
+
+CLAUDE.md, architecture.md and ADR 0001 all stated the ceil as deliberate.
+ADR 0006 records the reversal and the training status."
+```
+
 ## Done when
 
 - `make test`, `make lint`, and `npm run build` all pass.
@@ -970,3 +1093,4 @@ git commit -m "test: reproduce the Aug 2026 RTO email end to end"
 - Tapping a weekday cycles through training, and a training day drops the eligible count by one.
 - `drizzle/` contains the new migration and it is committed alongside `src/db/schema.ts`.
 - No `FyStats` assertion changed: the financial year still rounds up exactly once.
+- No document still claims the month rounds up, and ADR 0006 records the reversal.
