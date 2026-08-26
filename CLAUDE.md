@@ -159,13 +159,30 @@ is an allowlist on purpose: the live feed carries exactly two values, `Public ho
 so, where a denylist would mark Easter Sunday a holiday and quietly lower the requirement.
 An empty parse from a feed that answered is therefore reported as a format change, not as
 a year without holidays.
+A second allowlist, `NATIONWIDE_HOLIDAYS`, decides which of those are non-working
+*nationwide*: the feed carries no such field — every event is `CLASS:PUBLIC` and
+`DESCRIPTION` takes only two values — so the judgement lives in code. It drops the BARMM-only
+days (Maulid un-Nabi, Lailatul Isra Wal Mi Raj, Amun Jadid) and the second Eid day
+(`Eid al-Adha Holiday`), which is a second day rather than a weekend substitute — unlike
+`Day off for X`, which is kept. Both allowlists fail the same way on purpose: an unknown name
+is dropped, leaving the day eligible and the requirement *higher*, where a denylist would mark
+it and quietly lower the requirement.
 
-`day_entries.note` survives a status change and dies with the row: `setDayStatus` upserts
-`set: { status }` only. So cycling 25 Dec holiday → office keeps "Christmas Day" attached,
-and the calendar footnote — which requires `status === "holiday"` — simply stops listing
-it. `page.tsx` therefore sends `<Calendar>` **every** note in the month, not only those on
-holiday rows; filtering by status server-side would leave the footnote blank until a
-reload.
+**`ph_holidays` is the calendar; `day_entries` is the record.** The import writes both: every
+nationwide holiday of the year — **weekends included, and not clamped** — to the global
+`ph_holidays` table, and only the eligible weekdays to `day_entries`. Nothing computed reads
+`ph_holidays`; it feeds the month footnote alone, which is what keeps a tap beating the feed.
+It is unclamped safely because `fyWindowStart` derives its window from `day_entries` only.
+The import replaces the year's reference rows rather than upserting them, so a shifted
+tentative date does not accumulate a stale row beside the new one.
+
+The footnote lists every holiday the month has, annotating an entry only where the day is
+**still eligible** — `isEligible` already excludes mandated days and `leave` as well as
+`holiday`, so annotating a leave day would imply it counts when it does not.
+
+`day_entries.note` is still written and now has no reader. It records which rows the import
+wrote — provenance a hand-tap cannot carry — and dropping it would need a destructive
+migration under the expand-then-contract rule for no gain.
 
 **Compliance is cumulative within a financial year, which runs Aug–Jul.** An FY is
 named for the calendar year it ends in: FY2027 is Aug 2026 – Jul 2027
@@ -205,8 +222,7 @@ month (`searchParams` is a Promise in this Next version — `await` it). It then
 `day_entries` and `wfh_mandates` across the whole FY window rather than the displayed
 month alone — the window is one month wide only in August, or when nothing was recorded
 before the displayed month — and hands `<Calendar>` a plain `Entries` map of just that
-month's rows, a `notes` map of
-every note in that month whatever the row's status, and the `FyBaseline` for the months
+month's rows, the month's `ph_holidays` rows, and the `FyBaseline` for the months
 before it.
 
 **`<Calendar>` must keep its `key={monthKey}`.** Next does not remount on search-param

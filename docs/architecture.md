@@ -26,6 +26,13 @@ day_entries
 
 **Absence of a row on a weekday means WFH.** Weekends are never stored.
 
+```
+ph_holidays
+  date  text  PRIMARY KEY  'YYYY-MM-DD'
+  name  text  imported holiday's name, display only
+  (global — not per-user; holds weekend dates, which day_entries never does)
+```
+
 ## Computation rules
 
 All in `src/lib/rto.ts` as pure functions over `YYYY-MM-DD` strings (no Date
@@ -34,8 +41,9 @@ parsing of strings — UTC component math only, to avoid timezone drift).
 - Eligible working days in a month = weekdays − mandated WFH − holidays − leaves
 - Mandated WFH days come from `wfh_mandates` day ranges, not from `day_entries`, and
   take precedence over any recorded status
-- Imported public holidays need no rule of their own: they are `holiday` rows in
-  `day_entries`, already out of the eligible pool, and a tap overwrites them
+- Imported public holidays need no rule of their own: the nationwide ones are `holiday` rows
+  in `day_entries`, already out of the eligible pool, and a tap overwrites them. `ph_holidays`
+  is display-only and no rule reads it
 - Required office days = `ceil(eligible × targetPercent / 100)`, where `targetPercent`
   comes from `rto_targets` for that month, defaulting to 40
 - RTO % = office ÷ eligible (0 when eligible is 0)
@@ -65,11 +73,13 @@ as a two-number aggregate, so the calendar can recompute the year's position loc
 after each tap.
 
 The settings page can import Philippine public holidays for one financial year: it fetches
-Google's public PH holiday ICS feed, keeps only events described as public holidays, and
-plans the write with `planHolidayImport` — which drops weekends, never overwrites an
-existing row, and never writes a day earlier than the user's first recorded one, so the
-import cannot move the FY window's start. The surviving days are inserted as `holiday`
-rows in a single statement, and `/` and `/settings` are revalidated.
+Google's public PH holiday ICS feed, keeps events described as public holidays whose name is on
+the `NATIONWIDE_HOLIDAYS` allowlist — the feed cannot distinguish a nationwide holiday from a
+BARMM-only one — and plans the write with `planHolidayImport`. That returns two lists: the
+weekday holidays to add to `day_entries`, which never overwrite an existing row and never
+predate the user's first recorded day, so the import cannot move the FY window's start; and the
+year's whole calendar for `ph_holidays`, weekends included and unclamped, which the month
+footnote renders. Both are written, and `/` and `/settings` are revalidated.
 
 ## Schema delivery
 
