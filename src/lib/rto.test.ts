@@ -1464,3 +1464,46 @@ describe("training days", () => {
     expect(s.requiredDays).toBe(7.6);
   });
 });
+
+// The RTO email of Aug 2026, reproduced in full:
+//   21 working days → 19 after holidays → 13 after a 6-day exclusion
+//   13 × 40% = 5.2 days required, further reduced by leave and training.
+describe("the Aug 2026 RTO email", () => {
+  // Wed 12 – Wed 19: weekdays 12, 13, 14, 17, 18, 19 = six. The window
+  // deliberately avoids Fri 21 Aug — a day that is both mandated and a holiday
+  // is excluded once, not twice, so a mandate spanning the 21st would leave 14
+  // eligible days rather than 13 and break the employer's worked example.
+  const mandate: WfhMandate[] = [
+    { startDate: "2026-08-12", endDate: "2026-08-19" },
+  ];
+
+  it("reproduces the stated 5.2", () => {
+    const s = computeMonthStats(
+      2026,
+      8,
+      { "2026-08-21": "holiday", "2026-08-31": "holiday" },
+      40,
+      mandate
+    );
+    expect(s.eligibleDays).toBe(13);
+    expect(s.mandatedDays).toBe(6);
+    expect(formatDays(s.requiredPoints)).toBe("5.2");
+  });
+
+  it("reduces the 5.2 further for leave and training", () => {
+    const s = computeMonthStats(
+      2026,
+      8,
+      {
+        "2026-08-21": "holiday",
+        "2026-08-31": "holiday",
+        "2026-08-03": "leave",
+        "2026-08-04": "training",
+      },
+      40,
+      mandate
+    );
+    expect(s.eligibleDays).toBe(11);
+    expect(formatDays(s.requiredPoints)).toBe("4.4");
+  });
+});
