@@ -61,6 +61,21 @@ export function periodsOverlap(a: TargetPeriod, b: TargetPeriod): boolean {
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /**
+ * Percent-points as a readable day count: 520 → "5.2", 800 → "8", 429 → "4.29".
+ *
+ * Takes points rather than a fractional day deliberately. `targetPercent` and
+ * `eligibleDays` are both whole, so points/100 is exact to two decimals and the
+ * string is built entirely from integer arithmetic — no binary float is ever
+ * formatted, and no rounding decision is hidden in here.
+ */
+export function formatDays(points: number): string {
+  const whole = Math.trunc(points / 100);
+  const frac = points % 100;
+  if (frac === 0) return String(whole);
+  return `${whole}.${String(frac).padStart(2, "0").replace(/0$/, "")}`;
+}
+
+/**
  * Financial years start in August. Hardcoded rather than configurable: one
  * employer, one calendar. The maths below assumes a start month after January,
  * which August is.

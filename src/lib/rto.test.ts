@@ -11,6 +11,7 @@ import {
   formatPeriodRange,
   formatDate,
   formatMandateRange,
+  formatDays,
   isValidDateKey,
   toMonthKey,
   DEFAULT_RTO_PERCENT,
@@ -1255,5 +1256,31 @@ describe("fyVerdict", () => {
         month(1)
       )
     ).toBe("1 office day short of FY2027's full year.");
+  });
+});
+
+describe("formatDays", () => {
+  it("renders a one-decimal requirement", () => {
+    expect(formatDays(520)).toBe("5.2"); // 13 eligible at 40%
+  });
+
+  it("renders a whole requirement without a decimal point", () => {
+    expect(formatDays(800)).toBe("8");
+    expect(formatDays(100)).toBe("1");
+    expect(formatDays(0)).toBe("0");
+  });
+
+  it("keeps a second decimal when the percentage produces one", () => {
+    expect(formatDays(429)).toBe("4.29"); // 13 eligible at 33%
+    expect(formatDays(405)).toBe("4.05"); // leading zero in the fraction
+  });
+
+  it("renders a fraction below one day", () => {
+    expect(formatDays(80)).toBe("0.8");
+  });
+
+  it("trims only the trailing zero, not a significant one", () => {
+    expect(formatDays(440)).toBe("4.4");
+    expect(formatDays(404)).toBe("4.04");
   });
 });
