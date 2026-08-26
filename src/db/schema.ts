@@ -135,3 +135,17 @@ export const wfhMandates = pgTable(
   },
   (t) => [index("wfh_mandates_user_start_idx").on(t.userId, t.startDate)]
 );
+
+/**
+ * The Philippine public holiday calendar, as imported from Google's ICS feed.
+ *
+ * Global on purpose — no `user_id`. PH holidays are the same for everyone and
+ * are public data, so a per-user copy would only duplicate rows. This table is
+ * the *calendar*; `day_entries` is the user's *record*. Nothing computed reads
+ * this: it feeds the month footnote only, which is what keeps a tap beating the
+ * feed. It deliberately holds weekend dates, which `day_entries` never does.
+ */
+export const phHolidays = pgTable("ph_holidays", {
+  date: text("date").primaryKey(), // YYYY-MM-DD; text avoids TZ drift
+  name: text("name").notNull(),
+});
