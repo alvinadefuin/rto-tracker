@@ -719,6 +719,10 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     //
     // Points, not the fractional day: the month's shortfall can be 0.2, so
     // both the comparison and the number formatting have to be exact.
+    //
+    // fyCarryNote stays silent whenever this sentence fires, because this one
+    // already accounts for the month's remainder. Reword the "covered" clause
+    // and the remainder goes unexplained — change both or neither.
     if (monthStats.remainingPoints > 0) {
       return `${ahead} — this month's ${dayCount(
         monthStats.remainingPoints,
@@ -742,9 +746,22 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
   }
 
   if (fy.balancePoints === 0) {
-    return fy.isFinalMonth
-      ? `Level — FY${fy.fy} covered exactly${windowNote}.`
-      : "Level — no days banked.";
+    if (fy.isFinalMonth)
+      return `Level — FY${fy.fy} covered exactly${windowNote}.`;
+    // The month's remainder is paid for at exactly level too, for the same
+    // reason the surplus branch above gives: the year's total already includes
+    // the displayed month's whole requirement, so a zero balance leaves nothing
+    // outstanding. Said out loud because fyCarryNote is silent here as well —
+    // the year is not owed — and without this clause nothing on screen would
+    // explain the month's "0.2 to go".
+    if (monthStats.remainingPoints > 0) {
+      return `Level — this month's ${dayCount(
+        monthStats.remainingPoints,
+        "remaining day is",
+        "remaining days are"
+      )} covered, with nothing banked.`;
+    }
+    return "Level — no days banked.";
   }
 
   const owed = -fy.balancePoints;
@@ -777,7 +794,7 @@ export function fyCarryNote(
   if (monthStats.remainingPoints === 0) return null;
   if (fy.remainingNeededPoints === 0) return null;
 
-  const unworked = `${dayCount(
+  const unworkedClause = `${dayCount(
     monthStats.remainingPoints,
     "day",
     "days"
@@ -785,9 +802,11 @@ export function fyCarryNote(
 
   // `isFinalMonth` is a month comparison — monthKey === fyEndMonth — and reads
   // no clock, so this branch is reachable for a July that has not happened.
-  // "July is its last month" is true either way; "the year ended short" is not.
+  // "July is the year's last month" is true either way; "the year ended short"
+  // is not. July is spelled out rather than derived because FY_START_MONTH is
+  // what makes it the last month — change that constant and this string lies.
   if (fy.isFinalMonth) {
-    return `Fractions carry, but only within the year — FY${fy.fy}'s total above already counts the ${unworked}, and July is its last month, so nothing settles it later.`;
+    return `Shortfalls carry, but only within the year — FY${fy.fy}'s total above already counts the ${unworkedClause}, and July is the year's last month, so no later month can settle the shortfall.`;
   }
-  return `Fractions carry — FY${fy.fy}'s total above already counts the ${unworked}, and settles it against a later month rather than raising next month's own target.`;
+  return `Shortfalls carry — FY${fy.fy}'s total above already counts the ${unworkedClause}. Next month's target does not change; a later month in the year can settle the shortfall.`;
 }

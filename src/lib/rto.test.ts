@@ -1262,6 +1262,20 @@ describe("fyVerdict", () => {
     ).toBe("Level — no days banked.");
   });
 
+  it("says the month is covered at exactly level, not just when ahead", () => {
+    // Reachable when an earlier surplus exactly offsets the month's remainder.
+    // Without this clause the month shows "0.2 to go", the year says "Level",
+    // and fyCarryNote is silent — nothing explains where the 0.2 went.
+    expect(
+      fyVerdict(
+        stats({ balancePoints: 0, cumulativeOffice: 26 }),
+        partDayMonth()
+      )
+    ).toBe(
+      "Level — this month's 0.2 remaining days are covered, with nothing banked."
+    );
+  });
+
   it("reports a shortfall against the whole year in July", () => {
     expect(
       fyVerdict(
@@ -1485,7 +1499,7 @@ describe("fyCarryNote", () => {
         partDayMonth()
       )
     ).toBe(
-      "Fractions carry — FY2027's total above already counts the 0.2 days this month left unworked, and settles it against a later month rather than raising next month's own target."
+      "Shortfalls carry — FY2027's total above already counts the 0.2 days this month left unworked. Next month's target does not change; a later month in the year can settle the shortfall."
     );
   });
 
@@ -1501,7 +1515,7 @@ describe("fyCarryNote", () => {
       partDayMonth()
     );
     expect(note).toBe(
-      "Fractions carry, but only within the year — FY2027's total above already counts the 0.2 days this month left unworked, and July is its last month, so nothing settles it later."
+      "Shortfalls carry, but only within the year — FY2027's total above already counts the 0.2 days this month left unworked, and July is the year's last month, so no later month can settle the shortfall."
     );
     // isFinalMonth is a month comparison, not a clock reading: eleven presses of
     // the next-month arrow reach a July that has not happened, so the sentence
@@ -1520,7 +1534,7 @@ describe("fyCarryNote", () => {
         month(2)
       )
     ).toBe(
-      "Fractions carry — FY2027's total above already counts the 2 days this month left unworked, and settles it against a later month rather than raising next month's own target."
+      "Shortfalls carry — FY2027's total above already counts the 2 days this month left unworked. Next month's target does not change; a later month in the year can settle the shortfall."
     );
   });
 
@@ -1535,6 +1549,56 @@ describe("fyCarryNote", () => {
         month(1)
       )
     ).toContain("counts the 1 day this month left unworked");
+  });
+
+  it("stays silent exactly when the verdict accounts for the month", () => {
+    // The invariant, asserted across both functions: the byte-for-byte string
+    // tests above cannot catch fyVerdict's "covered" clause being reworded,
+    // which would leave the month's remainder unexplained by either sentence.
+    for (const balancePoints of [-100, 0, 100]) {
+      const fy = stats({
+        balancePoints,
+        cumulativeOffice: 26 + balancePoints / 100,
+        remainingNeededPoints: Math.max(0, -balancePoints),
+      });
+      expect(fyVerdict(fy, partDayMonth()).includes("covered")).toBe(
+        fyCarryNote(fy, partDayMonth()) === null
+      );
+    }
+  });
+
+  it("says nothing about a partial window — the note is window-agnostic", () => {
+    // Deliberate, and recorded here so it stays deliberate: fyVerdict appends
+    // "(counted from …)" to the sentences that name the year as covered or
+    // short. This note names no such claim, so it needs no qualifier.
+    const note = fyCarryNote(
+      stats({
+        balancePoints: -20,
+        cumulativeOffice: 5,
+        cumulativeRequiredPoints: 520,
+        remainingNeededPoints: 20,
+        isPartialWindow: true,
+        windowStartMonth: "2027-06",
+      }),
+      partDayMonth()
+    );
+    expect(note).not.toContain("counted from");
+  });
+
+  it("names July's last-month limit for a whole-day remainder too", () => {
+    expect(
+      fyCarryNote(
+        stats({
+          balancePoints: -200,
+          cumulativeOffice: 24,
+          remainingNeededPoints: 200,
+          isFinalMonth: true,
+        }),
+        month(2)
+      )
+    ).toBe(
+      "Shortfalls carry, but only within the year — FY2027's total above already counts the 2 days this month left unworked, and July is the year's last month, so no later month can settle the shortfall."
+    );
   });
 });
 
