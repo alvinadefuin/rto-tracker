@@ -1095,48 +1095,39 @@ describe("computeFyStats", () => {
     expect(at105.balancePoints).toBe(60); // 0.6 banked, where ceil reported 0
   });
 
-  it(
-    "agrees with the old ceil on whether the year is owed, at every count",
-    () => {
-      // The property the whole change rests on: for an integer day count,
-      // `office × 100 ≥ P` is exactly `office ≥ ceil(P / 100)`. Swept across
-      // a whole requirement and two fractional ones, and either side of each,
-      // so it is asserted rather than argued — this is what keeps
-      // owedForYear's colour muting in stats.tsx unchanged.
-      const july = computeMonthStats(2027, 7, {}, 0); // 0% — no contribution
-      for (const weightedEligible of [10400, 10440, 10499]) {
-        for (let officeDays = 100; officeDays <= 110; officeDays++) {
-          const fy = computeFyStats(
-            "2027-07",
-            baseline({ officeDays, weightedEligible }),
-            july
-          );
-          const oldCeilSaidOwed =
-            officeDays < Math.ceil(weightedEligible / 100);
-          expect(fy.remainingNeededPoints > 0).toBe(oldCeilSaidOwed);
-        }
+  it("agrees with the old ceil on whether the year is owed, at every count", () => {
+    // The property the whole change rests on: for an integer day count,
+    // `office × 100 ≥ P` is exactly `office ≥ ceil(P / 100)`. Swept across a
+    // whole requirement and two fractional ones, and either side of each, so
+    // it is asserted rather than argued — this is what keeps owedForYear's
+    // colour muting in stats.tsx unchanged.
+    const july = computeMonthStats(2027, 7, {}, 0); // 0% — contributes nothing
+    for (const weightedEligible of [10400, 10440, 10499]) {
+      for (let officeDays = 100; officeDays <= 110; officeDays++) {
+        const fy = computeFyStats(
+          "2027-07",
+          baseline({ officeDays, weightedEligible }),
+          july
+        );
+        const oldCeilSaidOwed = officeDays < Math.ceil(weightedEligible / 100);
+        expect(fy.remainingNeededPoints > 0).toBe(oldCeilSaidOwed);
       }
     }
-  );
+  });
 
-  it(
-    "reports a part-day shortfall rather than rounding it to a whole day",
-    () => {
-      // August: 13 eligible at 40% is 5.2 owed, 5 stamped. Viewed from
-      // September, the year says 0.2 — the number the month card showed, not
-      // a whole day.
-      // 0% — no contribution
-      const september = computeMonthStats(2026, 9, {}, 0);
-      const fy = computeFyStats(
-        "2026-09",
-        baseline({ officeDays: 5, weightedEligible: 520 }),
-        september
-      );
-      expect(fy.cumulativeRequiredPoints).toBe(520);
-      expect(fy.balancePoints).toBe(-20);
-      expect(formatDays(fy.remainingNeededPoints)).toBe("0.2");
-    }
-  );
+  it("reports a part-day shortfall rather than rounding it to a whole day", () => {
+    // August: 13 eligible at 40% is 5.2 owed, 5 stamped. Viewed from September,
+    // the year says 0.2 — the number the month card showed, not a whole day.
+    const september = computeMonthStats(2026, 9, {}, 0); // 0% — contributes nothing
+    const fy = computeFyStats(
+      "2026-09",
+      baseline({ officeDays: 5, weightedEligible: 520 }),
+      september
+    );
+    expect(fy.cumulativeRequiredPoints).toBe(520);
+    expect(fy.balancePoints).toBe(-20);
+    expect(formatDays(fy.remainingNeededPoints)).toBe("0.2");
+  });
 });
 
 // Shared by describe("fyVerdict") and describe("fyFillPercent") below — both
@@ -1470,18 +1461,19 @@ describe("fyFillPercent", () => {
   });
 
   it("floors a partial year rather than flattering it", () => {
-    // 5 stamped against 5.2 owed is 96%. The old ceil drew this at
-    // floor(5/6) = 83%, understating a year that is nearly met.
+    // 4 stamped against 5.2 owed is 76.92%, which floors to 76 and would round
+    // to 77. Picked to separate the two: the fixture this replaced was 5 of
+    // 5.2, at 96.15%, which floors and rounds alike and so pinned nothing.
     expect(
       fyFillPercent(
         stats({
-          cumulativeOffice: 5,
+          cumulativeOffice: 4,
           cumulativeRequiredPoints: 520,
-          balancePoints: -20,
-          remainingNeededPoints: 20,
+          balancePoints: -120,
+          remainingNeededPoints: 120,
         })
       )
-    ).toBe(96);
+    ).toBe(76);
   });
 
   it("clamps a sub-day surplus that computes past 100", () => {
