@@ -550,6 +550,10 @@ git commit -m "feat: hold the financial-year requirement in un-rounded points"
 - Modify: `src/lib/rto.ts` — new exported function after `fyVerdict`
 - Test: `src/lib/rto.test.ts` — hoist two helpers, add `describe("fyCarryNote")`
 
+**The copy in Steps 2 and 4 below is superseded.** Review found three defects in it and the sentences were rewritten in a follow-up commit, `fix: word the carry note truthfully at every remainder size`. The shipped wording, and why each earlier draft failed, is recorded in the design doc's "### The carry note" section — read that, not the blocks below, for the current strings. In outline: "Fractions carry" was false of a whole-day remainder, which the function deliberately fires on; "settles it" disagreed with its antecedent for every quantity but exactly one day; and its subject parsed as the year's *total*, which settles nothing, letting the sentence be read as "already absorbed, nothing to do".
+
+The same follow-up fixed a reachable hole this step's `null` rule assumed away: the second guard fires at `balancePoints >= 0`, but `fyVerdict` named the month's remainder only above zero, so exactly-level months explained the remainder nowhere. `fyVerdict`'s level branch now covers it.
+
 - [ ] **Step 1: Hoist the shared fixtures out of the `fyVerdict` block**
 
 `stats()` and `month()` currently live inside `describe("fyVerdict", ...)`. Move both, unchanged, to module scope immediately **above** `describe("fyVerdict", ...)` so the new block can use them.

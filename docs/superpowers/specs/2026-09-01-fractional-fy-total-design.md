@@ -156,17 +156,43 @@ Returns `null` unless **both** `monthStats.remainingPoints > 0` and
 second is what keeps it from contradicting the `balance > 0` branch of
 `fyVerdict`, which already reports the month's remainder as covered.
 
+**Amended during implementation.** That second condition fires whenever
+`balancePoints >= 0`, but `fyVerdict` named the month's remainder only in its
+`balancePoints > 0` branch. At exactly level with a remainder outstanding —
+reachable whenever an earlier surplus offsets the month exactly — the month card
+read `0.2 to go`, the year read `Level — no days banked.`, and the note stayed
+silent, so nothing on screen explained the 0.2. The rule above is right; the
+assumption underneath it was not. Fixed in `fyVerdict`'s level branch, which now
+says the remainder is covered there too, on the reasoning its own surplus branch
+already carried: a **non-negative** balance means the month's remaining days are
+paid for.
+
 ```
-Fractions carry — this month's 0.2 is already in FY2027's total above, and
-settles against a later month rather than raising next month's own target.
+Shortfalls carry — FY2027's total above already counts the 0.2 days this month
+left unworked. Next month's target does not change; a later month in the year
+can settle the shortfall.
 ```
 
 July has no later month, so `isFinalMonth` gets its own wording:
 
 ```
-Fractions carry, but only within the year — this month's 0.2 is in FY2027's
-total above, and July is its last month, so nothing settles it later.
+Shortfalls carry, but only within the year — FY2027's total above already counts
+the 0.2 days this month left unworked, and July is the year's last month, so no
+later month can settle the shortfall.
 ```
+
+**These sentences were rewritten during implementation**, and the earlier drafts
+are worth recording because each failed in a way the next avoided. "Fractions
+carry" was false of the note's commonest case: with a whole number of eligible
+days at 40%, the remainder is often a whole day, and the function fires on those
+too. "…and settles it against a later month" disagreed with its antecedent
+everywhere except at exactly one day, since `dayCount` is plural for every
+quantity but 100 points. And its subject parsed as *FY2027's total*, which
+settles nothing — a later office day does — so the sentence could be read as
+saying the year had already absorbed the debt, the exact opposite of the answer
+it exists to give. The shipped wording keeps every noun that could need
+agreement fixed-singular ("a later month", "the shortfall") and states the
+actionable half outright.
 
 Phrased as a month comparison, never as time having passed. `isFinalMonth` is
 `monthKey === fyEndMonth` and knows nothing about a clock, so eleven presses of
