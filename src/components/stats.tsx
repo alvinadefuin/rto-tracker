@@ -69,7 +69,7 @@ function MonthBlock({
   // loses the alarm colour. The FY line below is where the number to act on is.
   // Both colours below defer to this one flag, symmetrically: neither the
   // month's alarm nor its celebration survives the year disagreeing.
-  const owedForYear = fyStats === null || fyStats.remainingNeeded > 0;
+  const owedForYear = fyStats === null || fyStats.remainingNeededPoints > 0;
 
   return (
     <div className="space-y-2">
@@ -143,15 +143,20 @@ function FyBlock({
   fyStats: FyStats;
   monthStats: MonthStats;
 }) {
-  const { cumulativeOffice, cumulativeRequired, balance } = fyStats;
+  const { cumulativeOffice, cumulativeRequiredPoints, balancePoints } = fyStats;
   // Full when nothing is required: an empty bar against a zero target would
   // read as no progress rather than no obligation. Otherwise floor, not
   // round: rounding renders 259/260 as a solid bar sitting directly above
   // "1 office day short", so the bar reads full only when the year is met.
+  // Integer math on points, scaled by 10000 — no float divides a requirement
+  // the rest of the app keeps exact.
   const fillPercent =
-    cumulativeRequired === 0
+    cumulativeRequiredPoints === 0
       ? 100
-      : Math.min(100, Math.floor((cumulativeOffice / cumulativeRequired) * 100));
+      : Math.min(
+          100,
+          Math.floor((cumulativeOffice * 10000) / cumulativeRequiredPoints)
+        );
 
   // Its own landmark: this is a second subject inside "Progress", and the year
   // is the one a screen reader has no other way to skip to.
@@ -173,9 +178,11 @@ function FyBlock({
           />
         </div>
         <p className="font-mono text-sm">
-          {cumulativeOffice}/{cumulativeRequired}{" "}
+          {cumulativeOffice}/{formatDays(cumulativeRequiredPoints)}{" "}
           {fyStats.isFinalMonth ? "for the year" : "to date"}
-          {balance > 0 && <span className="text-stamp"> +{balance}</span>}
+          {balancePoints > 0 && (
+            <span className="text-stamp"> +{formatDays(balancePoints)}</span>
+          )}
         </p>
       </div>
       <p className="text-sm text-fade">{fyVerdict(fyStats, monthStats)}</p>

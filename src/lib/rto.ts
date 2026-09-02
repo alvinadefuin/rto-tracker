@@ -22,8 +22,9 @@ export interface MonthStats {
   requiredPoints: number;
   /**
    * max(0, requiredPoints − officeDays × 100). Exact, so `=== 0` *is* the
-   * target-met test. The month never rounds; the year rounds up once, in
-   * computeFyStats.
+   * target-met test. Neither the month nor the year rounds: the FY sums these
+   * points as they are, and `formatDays` at the display edge is the only place
+   * points become days.
    */
   remainingPoints: number;
   targetPercent: number; // whole percent required this month, e.g. 20
@@ -479,9 +480,10 @@ export interface MonthsAggregate {
   officeDays: number;
   /**
    * Σ of each month's `requiredPoints` across the months, in percent-points and
-   * deliberately **un-rounded**. Dividing by 100 exactly once, at the end, in
-   * computeFyStats is the whole point: it is what makes a 260-weekday year at
-   * 40% owe 104 days rather than the ~110 that twelve monthly round-ups cost.
+   * deliberately **un-rounded**. Nothing downstream rounds it either — ADR 0007
+   * removed the year's single `ceil`, so these points reach `formatDays`
+   * exactly as summed. Summing per-month round-ups instead would bill a
+   * 260-weekday year at 40% about 110 days rather than the 104 it owes.
    */
   weightedEligible: number;
 }
@@ -558,10 +560,28 @@ export interface FyStats {
   windowStartMonth: string;
   isPartialWindow: boolean; // windowStartMonth > fyStartMonth
   isFinalMonth: boolean; // monthKey === fyEndMonth
+  /** Whole office days stamped across the window — a tally of stamps, not points. */
   cumulativeOffice: number;
-  cumulativeRequired: number;
-  balance: number; // office − required; negative means days are owed
-  remainingNeeded: number; // max(0, −balance)
+  /**
+   * Σ of each counted month's `requiredPoints`, in integer percent-points and
+   * **never rounded**. The year holds its requirement exactly as the month
+   * does; `formatDays` at the display edge is the only place it becomes days.
+   */
+  cumulativeRequiredPoints: number;
+  /**
+   * cumulativeOffice × 100 − cumulativeRequiredPoints. Negative means days are
+   * owed. Both operands are integers, so `=== 0` *is* the level test — the same
+   * reason MonthStats holds points rather than a fractional day.
+   */
+  balancePoints: number;
+  /**
+   * max(0, −balancePoints). Its sign test is exactly what it was before the
+   * year stopped rounding: for an integer day count,
+   * `cumulativeOffice × 100 < P` iff `cumulativeOffice < ceil(P / 100)`. So
+   * every boolean keyed off "is the year owed" — `owedForYear` in stats.tsx
+   * above all — kept its behaviour; only the magnitude reported got finer.
+   */
+  remainingNeededPoints: number;
 }
 
 /**
@@ -571,10 +591,12 @@ export interface FyStats {
  * from the caller: they are a function of it, and a caller that passed both
  * could pass a July with another year's bounds and get isFinalMonth: false.
  *
- * The single Math.ceil here is the design: prior months contribute un-rounded
- * percent-points, the displayed month adds its own, and the year rounds up once.
- * Every field is derived from month keys and integers, so nothing consults the
- * clock and the client can recompute this after each tap.
+ * Nothing here rounds. Prior months contribute un-rounded percent-points, the
+ * displayed month adds its own, and the total stays in points all the way to
+ * the screen — so a month that left 0.2 unworked is reported as 0.2 owed for
+ * the year rather than as a whole day (ADR 0007). Every field is derived from
+ * month keys and integers, so nothing consults the clock and the client can
+ * recompute this after each tap.
  */
 export function computeFyStats(
   monthKey: string,
@@ -586,9 +608,9 @@ export function computeFyStats(
     financialYearBounds(fy);
 
   const cumulativeOffice = baseline.prior.officeDays + monthStats.officeDays;
-  const weighted = baseline.prior.weightedEligible + monthStats.requiredPoints;
-  const cumulativeRequired = Math.ceil(weighted / 100);
-  const balance = cumulativeOffice - cumulativeRequired;
+  const cumulativeRequiredPoints =
+    baseline.prior.weightedEligible + monthStats.requiredPoints;
+  const balancePoints = cumulativeOffice * 100 - cumulativeRequiredPoints;
   return {
     fy,
     fyStartMonth,
@@ -597,14 +619,24 @@ export function computeFyStats(
     isPartialWindow: baseline.windowStartMonth > fyStartMonth,
     isFinalMonth: monthKey === fyEndMonth,
     cumulativeOffice,
-    cumulativeRequired,
-    balance,
-    remainingNeeded: Math.max(0, -balance),
+    cumulativeRequiredPoints,
+    balancePoints,
+    remainingNeededPoints: Math.max(0, -balancePoints),
   };
 }
 
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`;
+/**
+ * Percent-points as a counted noun: `100` → "1 day", `20` → "0.2 days",
+ * `250` → "2.5 days".
+ *
+ * Replaces the whole-number `plural` this file used to carry. Every quantity it
+ * counts is points now, so the singular is keyed off exactly 100 points rather
+ * than off `=== 1`: a 0.2 is plural, and only a whole single day is not. That
+ * rule already existed inline in fyVerdict's month-remainder branch; this is
+ * the one definition of it.
+ */
+const dayCount = (points: number, one: string, many: string) =>
+  `${formatDays(points)} ${points === 100 ? one : many}`;
 
 /**
  * The one sentence saying what the financial year still owes.
@@ -626,8 +658,8 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     ? ` (counted from ${formatMonth(fy.windowStartMonth)})`
     : "";
 
-  if (fy.balance > 0) {
-    const ahead = `${plural(fy.balance, "day", "days")} ahead`;
+  if (fy.balancePoints > 0) {
+    const ahead = `${dayCount(fy.balancePoints, "day", "days")} ahead`;
     // `isFinalMonth` is a month comparison — monthKey === fyEndMonth — not a
     // statement about time. Nothing here reads a clock, so eleven presses of
     // the next-month arrow land in this branch for a July that has not
@@ -644,13 +676,11 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     // Points, not the fractional day: the month's shortfall can be 0.2, so
     // both the comparison and the number formatting have to be exact.
     if (monthStats.remainingPoints > 0) {
-      const noun =
-        monthStats.remainingPoints === 100
-          ? "remaining day is"
-          : "remaining days are";
-      return `${ahead} — this month's ${formatDays(
-        monthStats.remainingPoints
-      )} ${noun} covered.`;
+      return `${ahead} — this month's ${dayCount(
+        monthStats.remainingPoints,
+        "remaining day is",
+        "remaining days are"
+      )} covered.`;
     }
     return `${ahead} — banked toward later months.`;
   }
@@ -662,18 +692,18 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
   // Worded without naming a cause OR an eligibility count: a mandate, a month of
   // leave, and a 0% period all land here, and the last one has eligible days that
   // were counted and then weighted to zero.
-  if (fy.cumulativeRequired === 0) {
+  if (fy.cumulativeRequiredPoints === 0) {
     return "No requirement — the year owes nothing.";
   }
 
-  if (fy.balance === 0) {
+  if (fy.balancePoints === 0) {
     return fy.isFinalMonth
       ? `Level — FY${fy.fy} covered exactly${windowNote}.`
       : "Level — no days banked.";
   }
 
-  const owed = -fy.balance;
+  const owed = -fy.balancePoints;
   return fy.isFinalMonth
-    ? `${plural(owed, "office day", "office days")} short of FY${fy.fy}'s full year${windowNote}.`
-    : `${plural(owed, "more office day", "more office days")} needed to be level.`;
+    ? `${dayCount(owed, "office day", "office days")} short of FY${fy.fy}'s full year${windowNote}.`
+    : `${dayCount(owed, "more office day", "more office days")} needed to be level.`;
 }
