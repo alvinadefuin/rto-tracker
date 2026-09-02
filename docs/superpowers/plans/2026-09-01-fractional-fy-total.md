@@ -38,6 +38,8 @@ The whole rename lands in one commit. Splitting it would leave the suite red bet
 - Modify: `src/components/stats.tsx:72`, `:146`, `:151-154`, `:176`, `:178`
 - Test: `src/lib/rto.test.ts` — `describe("computeFyStats")` from `:939`, `describe("fyVerdict")` from `:1075`
 
+**Corrected during execution.** Three further describe blocks lower in `rto.test.ts` — `"financial year still rounds exactly once"`, `"the FY roll-up across a rate change"` and `"the year is stricter than its months"` — assert the old `ceil` directly, and this plan missed them. They must be converted in this same commit, since Step 13 gates unconditionally on `make test`. Convert their field names and values, retire only the now-false rounding claims in their titles and comments, and **keep every assertion** — in particular the `toBeLessThan(monthlySum)` comparisons against summing per-month `ceil`s, rewritten as `toBeLessThan(monthlySum * 100)`. Those comparisons are the coverage; deleting one to make a block pass would hollow it out.
+
 - [ ] **Step 1: Rewrite the `computeFyStats` assertions to points**
 
 In `src/lib/rto.test.ts`, inside `describe("computeFyStats", ...)`. Replace these five tests wholesale — the fixtures above them (`PRIOR_AUG_SEP`, `OCT_OFFICE`, `baseline`) and the `derives the year and its bounds`, `flags the final month only in July` and `flags a partial window` tests are unchanged.
@@ -429,7 +431,16 @@ const dayCount = (points: number, one: string, many: string) =>
 
 - [ ] **Step 10: Convert `fyVerdict`'s field reads and counted nouns**
 
-Four edits inside `fyVerdict`. Every comment in the function stays — none of them is invalidated.
+Four edits inside `fyVerdict`.
+
+**Corrected during execution.** This step originally claimed every comment in the function survives untouched. That was wrong in four places, two of them left stating something false about code this commit changes. All four are fixed in a follow-up commit, `docs: correct comments the un-rounded year invalidated`:
+
+- `computeMonthStats` (~`:424`) — "the financial year is where the fraction is finally settled, with a single Math.ceil in computeFyStats" describes exactly what this commit removes.
+- `fyVerdict`'s doc comment (~`:646`) — cites `fy.remainingNeeded` "— whole days —", and its whole argument is that the month's and year's shortfalls are "different quantities in different units". After this commit they share a unit, which makes the type-based protection *more* load-bearing, not less. The paragraph needs its reasoning restated, not just a rename.
+- The surplus branch (~`:671`) — names `cumulativeRequired`; claim still holds.
+- The zero-requirement preamble (~`:690`) — "balance equals cumulativeOffice when nothing is required" is now off by a factor of 100. Conclusion holds, identity does not.
+
+The lesson for future plans in this codebase: comments here carry the reasoning, so a rename sweep has to grep the prose, not only the code.
 
 The surplus branch head:
 
@@ -1001,7 +1012,7 @@ Expected: no TypeScript output, Vitest all-pass, ESLint clean.
 ```bash
 grep -n "Math.ceil" src/lib/rto.ts
 ```
-Expected: exactly one hit — `const slots = Math.ceil(requiredPoints / 100)` in `monthMeter`, which rounds the month's *ring count* and is deliberately out of scope. Any hit inside `computeFyStats` is a missed edit.
+Expected: exactly one hit — `const slots = Math.ceil(requiredPoints / 100)` in `monthMeter`, which rounds the month's *ring count* and is deliberately out of scope. Any hit inside `computeFyStats` is a missed edit. A hit in comment prose counts as a miss too: `computeMonthStats` used to cite the year's `ceil` in a comment, and that is one of the four stale comments Task 1 has to fix.
 
 - [ ] **Step 3: Confirm every old field name is gone**
 
