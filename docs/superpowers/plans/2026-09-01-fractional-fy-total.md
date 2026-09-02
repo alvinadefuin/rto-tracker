@@ -752,6 +752,10 @@ git commit -m "feat: say where a month's unpaid fraction went"
 
 No test: Vitest runs in a `node` environment and this project unit-tests `src/lib/rto.ts` only. The sentence itself is already covered by Task 2; this task only wires it in.
 
+**Styling question raised and settled during execution.** The note lands as a second `text-sm text-fade` paragraph directly beneath the verdict — ~200 characters under ~35, at identical weight, where every other block in this file has only one fade caption. `text-xs` for the note was proposed to restore the hierarchy, and **rejected**: `--color-fade` is `#82877d` on `#f4f5f0`, which measures **3.36:1**, below the 4.5:1 AA floor for normal text. `globals.css` says so itself, describing fade as sitting on the 3:1 non-text floor. Shrinking text that is already under the text floor buys typography at the cost of legibility, and the WCAG ratio does not improve at 12px either. Both paragraphs stay at `text-sm`.
+
+That leaves a real observation for later, outside this feature: **every `text-sm text-fade` caption in the app is below the AA text floor**, not just this one. Fixing it means darkening the token or promoting the captions, which touches every screen — its own change, with its own before-and-after.
+
 **Files:**
 - Modify: `src/components/stats.tsx` — import list, `FyBlock`
 
