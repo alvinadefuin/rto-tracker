@@ -264,7 +264,9 @@ snapshot, so SSR output stays timezone-independent.
   `src/app/globals.css` (`paper`, `ink`, `rule`, `stamp`, `leave`, `holiday`, `training`,
   `fade`). There is no `tailwind.config.*` — add design tokens there, not in a config
   file.
-- Vitest runs in a `node` environment; only `src/lib/rto.ts` (pure logic) is unit-tested —
-  which is why `monthMeter`, `fyVerdict`, and `fyFillPercent` compute their numbers there
-  rather than inline in `stats.tsx`: arithmetic inside JSX has no DOM to run under, so it
-  would ship untested.
+- Vitest runs in a `node` environment; only `src/lib/rto.ts` (pure logic) is unit-tested.
+  That is why `monthMeter` and `fyFillPercent` compute their numbers there, and why
+  `fyVerdict` and `fyCarryNote` assemble their sentences there, rather than inline in
+  `stats.tsx`: a `node` environment cannot render a component, so anything living inside
+  JSX cannot be asserted and ships untested. Put arithmetic and copy in `rto.ts`; leave
+  `stats.tsx` to draw what it is handed.
