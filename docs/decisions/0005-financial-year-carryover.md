@@ -22,6 +22,12 @@ cumulativeRequired = ceil(weightedEligible / 100)
 balance            = cumulativeOffice − cumulativeRequired
 ```
 
+**Amended 2026-09-01 by ADR 0007:** the `ceil` is gone. The year now holds
+`cumulativeRequiredPoints = Σ (eligibleDays_m × percent_m)` in points and
+`balancePoints = cumulativeOffice × 100 − cumulativeRequiredPoints`. No verdict
+boundary moved — for an integer day count the two forms agree on whether the year
+is owed — but every magnitude reported is now exact.
+
 FY2027 means Aug 2026 – Jul 2027 — named for the year it ends in, the user's own
 convention. `FY_START_MONTH` is a hardcoded constant, not a setting: one employer, one
 calendar.
@@ -49,6 +55,9 @@ Rejected alternatives:
   shortfall loses its alarm colour when the bank already covers it.
 - Per-month figures no longer sum to the FY figure, because the year rounds once. The FY
   line is authoritative.
+  **Amended 2026-09-01 by ADR 0007:** the year no longer rounds, so per-month
+  points do sum to the FY figure exactly. The FY line stays authoritative for a
+  different reason — it is the only figure that spans the window.
 - A shortfall carries forward as well as a surplus: a missed February raises March's
   effective need. That is symmetry, not a bug.
 - The window starts no earlier than the month of the first recorded day. An FY that

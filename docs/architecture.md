@@ -47,15 +47,16 @@ parsing of strings — UTC component math only, to avoid timezone drift).
   is display-only and no rule reads it
 - Required office days = `eligible × targetPercent` in integer percent-points,
   **un-rounded** — 13 eligible at 40% is 520 points, i.e. 5.2 days. `targetPercent`
-  comes from `rto_targets` for that month, defaulting to 40. The month never rounds;
-  the financial year rounds up once (see below)
+  comes from `rto_targets` for that month, defaulting to 40. Neither the month nor
+  the financial year rounds (see below)
 - RTO % = office ÷ eligible (0 when eligible is 0)
 - Weekly breakdown: Mon–Fri chunks, partial chunks at month edges — informational
   only. The requirement is computed per month and assessed across the financial year
 - Financial years run Aug–Jul, named for the year they end in (FY2027 = Aug 2026 –
   Jul 2027). Compliance is cumulative within a year and resets at the boundary
-- FY required office days = `ceil(Σ(eligible_m × percent_m) / 100)` — one rounding step
-  for the year, not one per month
+- FY required office days = `Σ(eligible_m × percent_m)` in percent-points, un-rounded —
+  no rounding step anywhere. Clearing a year that owes 104.4 still takes 105 whole days,
+  since office days are integers; the figure is exact, the boundary is unchanged
 - The FY shown is the one containing the *displayed* month; the clock is read only to
   pick the default month when `?m=` is absent, through local getters, so that one
   choice is server-timezone-dependent — and near 31 Jul / 1 Aug it is an FY boundary

@@ -198,9 +198,13 @@ February, work an extra in March, and the year is level — and nothing crosses 
 boundary. `aggregateMonths` owns the per-month loop: it sums `eligibleDays × percent`
 into `weightedEligible`, in **percent-points and deliberately un-rounded**.
 `computeFyStats` adds only the displayed month's own contribution to that already-summed
-baseline, then divides by 100 and rounds up exactly once for the year. Rounding per
-month instead costs about six office days a year, so never round a month's
-`requiredPoints` to whole days and sum those.
+baseline and **rounds nothing** — the year holds its requirement in points exactly as the
+month does, and `formatDays` at the display edge is the only place points become days.
+Rounding per month instead costs about six office days a year, so never round a month's
+`requiredPoints` to whole days and sum those. Dropping the year's `ceil` (ADR 0007)
+moved no verdict boundary: for an integer day count, `office × 100 ≥ P` iff
+`office ≥ ceil(P / 100)`, so a year owing 104.4 still takes 105 whole days to clear —
+only the reported magnitude got finer. `fyCarryNote` is the one sentence that says so.
 
 **The FY on screen follows the displayed month; the clock is read once, to choose the
 default month.** `financialYearOf` takes a month key for the same reason today's date is
@@ -216,7 +220,7 @@ earliest `day_entries` row, so an FY that predates the app reports nothing rathe
 hundred-day deficit. That rule is `fyWindowStart`, not a ternary in the page.
 `page.tsx` hands `<Calendar>` an `FyBaseline` holding **two numbers** for the prior
 months, not their entries — only the displayed month is editable from that view, so the
-client adds its live month to a fixed prior and re-runs the same single `ceil`.
+client adds its live month to a fixed prior and re-runs the same points arithmetic.
 `FyBaseline` carries nothing derivable: `computeFyStats` takes the displayed month key
 and works out the year and its bounds itself, so no caller can pair a July with another
 year's bounds.
@@ -260,4 +264,7 @@ snapshot, so SSR output stays timezone-independent.
   `src/app/globals.css` (`paper`, `ink`, `rule`, `stamp`, `leave`, `holiday`, `training`,
   `fade`). There is no `tailwind.config.*` — add design tokens there, not in a config
   file.
-- Vitest runs in a `node` environment; only `src/lib/rto.ts` (pure logic) is unit-tested.
+- Vitest runs in a `node` environment; only `src/lib/rto.ts` (pure logic) is unit-tested —
+  which is why `monthMeter`, `fyVerdict`, and `fyFillPercent` compute their numbers there
+  rather than inline in `stats.tsx`: arithmetic inside JSX has no DOM to run under, so it
+  would ship untested.

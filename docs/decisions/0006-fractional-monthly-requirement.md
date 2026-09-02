@@ -58,6 +58,10 @@ Rejected alternatives:
   for 20, because a fifth of a day cannot be worked. "5.2 required this month" on screen
   and a year demanding a whole extra day coexist by design; the FY line is the
   authoritative one, as ADR 0005 already said.
+  **Amended 2026-09-01 by ADR 0007:** it no longer is. The year asks for 19.8 and
+  reports a 0.2 surplus at 20 days stamped. Clearing the year still takes 20 whole
+  days — an integer day count cannot land on 19.8 — so what changed is the figure
+  on screen, not what it takes to comply.
 - ADR 0001 decision 5 is superseded, and is marked so in place rather than rewritten.
 - Every month figure moves. A month previously met at its rounded-up requirement is
   still met; a month met at exactly the rounded figure is now met with a surplus.
