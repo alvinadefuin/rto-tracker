@@ -440,7 +440,7 @@ Four edits inside `fyVerdict`.
 - The surplus branch (~`:671`) — names `cumulativeRequired`; claim still holds.
 - The zero-requirement preamble (~`:690`) — "balance equals cumulativeOffice when nothing is required" is now off by a factor of 100. Conclusion holds, identity does not.
 
-The lesson for future plans in this codebase: comments here carry the reasoning, so a rename sweep has to grep the prose, not only the code.
+The lesson for future plans in this codebase: comments here carry the reasoning, so a rename sweep has to grep the prose, not only the code — **and the grep decides the file list, not the other way round.** This plan scoped its prose sweep to the files it had already named, and both remaining misses (`page.tsx:157-159`, `CLAUDE.md:219`) were outside them. A rename step here should grep the identifier *and the mechanism it names* across `src/`, `CLAUDE.md` and `docs/`, then triage the hits.
 
 The surplus branch head:
 
@@ -552,7 +552,11 @@ git commit -m "feat: hold the financial-year requirement in un-rounded points"
 
 - [ ] **Step 1: Hoist the shared fixtures out of the `fyVerdict` block**
 
-`stats()` and `month()` currently live inside `describe("fyVerdict", ...)`. Move both, unchanged, to module scope immediately **above** `describe("fyVerdict", ...)` so the new block can use them. Then add a third fixture beside them:
+`stats()` and `month()` currently live inside `describe("fyVerdict", ...)`. Move both, unchanged, to module scope immediately **above** `describe("fyVerdict", ...)` so the new block can use them.
+
+**Done during execution.** Task 1's fix round pulled this hoist forward — `fyFillPercent`'s new tests needed the same `stats()` fixture. Verify it is already at module scope rather than moving it twice.
+
+Then add a third fixture beside them:
 
 ```ts
 // A month with a genuinely fractional remainder: 13 eligible at 40% is 5.2
@@ -985,6 +989,10 @@ moved no verdict boundary: for an integer day count, `office × 100 ≥ P` iff
 `office ≥ ceil(P / 100)`, so a year owing 104.4 still takes 105 whole days to clear —
 only the reported magnitude got finer. `fyCarryNote` is the one sentence that says so.
 ```
+
+**A second sentence in the same file, added during execution.** Around `CLAUDE.md:219`, in the paragraph on `FyBaseline`: "the client adds its live month to a fixed prior and re-runs the same single `ceil`". That `ceil` is gone. Change the clause to "re-runs the same points arithmetic". Its twin at `page.tsx:157-159` was fixed in Task 1's follow-up; this one is the last stale reference to the year's rounding anywhere in the repo outside the ADR record.
+
+Also add `fyFillPercent` to the file's account of where arithmetic lives — Task 1's fix round moved the FY bar's fill out of `stats.tsx` into `rto.ts`, alongside `monthMeter` and `fyVerdict`, for the reason both of those already give.
 
 - [ ] **Step 6: Commit**
 
