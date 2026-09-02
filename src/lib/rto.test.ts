@@ -29,6 +29,7 @@ import {
   computeFyStats,
   fyFillPercent,
   fyVerdict,
+  fyCarryNote,
   monthMeter,
   type Entries,
   type TargetPeriod,
@@ -1166,6 +1167,23 @@ function month(remainingDays: number): MonthStats {
   };
 }
 
+// A month with a genuinely fractional remainder: 13 eligible at 40% is 5.2
+// owed, so five stamped leaves 0.2. month() above cannot express this — its
+// requirement is a whole 11 days, and a whole requirement can only leave whole
+// remainders.
+function partDayMonth(): MonthStats {
+  return {
+    eligibleDays: 13,
+    officeDays: 5,
+    requiredPoints: 520,
+    remainingPoints: 20,
+    targetPercent: 40,
+    achievedPercent: 38,
+    mandatedDays: 6,
+    weeks: [],
+  };
+}
+
 describe("fyVerdict", () => {
   it("says nothing was required without blaming a mandate", () => {
     expect(
@@ -1360,17 +1378,7 @@ describe("fyVerdict", () => {
   });
 
   it("renders a part-day shortfall without float residue", () => {
-    const m: MonthStats = {
-      eligibleDays: 13,
-      officeDays: 5,
-      requiredPoints: 520,
-      remainingPoints: 20,
-      targetPercent: 40,
-      achievedPercent: 38,
-      mandatedDays: 6,
-      weeks: [],
-    };
-    const verdict = fyVerdict(stats(), m); // stats() defaults to balance 3
+    const verdict = fyVerdict(stats(), partDayMonth()); // stats() defaults to +3 days
     expect(verdict).toBe(
       "3 days ahead — this month's 0.2 remaining days are covered."
     );
@@ -1442,6 +1450,91 @@ describe("fyVerdict", () => {
         month(0)
       )
     ).toBe("0.4 office days short of FY2027's full year.");
+  });
+});
+
+describe("fyCarryNote", () => {
+  it("says nothing when the month leaves no remainder", () => {
+    expect(
+      fyCarryNote(
+        stats({
+          balancePoints: -200,
+          cumulativeOffice: 24,
+          remainingNeededPoints: 200,
+        }),
+        month(0)
+      )
+    ).toBeNull();
+  });
+
+  it("says nothing when the year already covers the month's remainder", () => {
+    // fyVerdict reports it covered two lines up; a note saying it is still owed
+    // would argue with the sentence directly above it.
+    expect(fyCarryNote(stats(), partDayMonth())).toBeNull();
+  });
+
+  it("names the year an unpaid fraction went into", () => {
+    expect(
+      fyCarryNote(
+        stats({
+          balancePoints: -20,
+          cumulativeOffice: 5,
+          cumulativeRequiredPoints: 520,
+          remainingNeededPoints: 20,
+        }),
+        partDayMonth()
+      )
+    ).toBe(
+      "Fractions carry — FY2027's total above already counts the 0.2 days this month left unworked, and settles it against a later month rather than raising next month's own target."
+    );
+  });
+
+  it("says July has no later month to settle against", () => {
+    const note = fyCarryNote(
+      stats({
+        balancePoints: -20,
+        cumulativeOffice: 5,
+        cumulativeRequiredPoints: 520,
+        remainingNeededPoints: 20,
+        isFinalMonth: true,
+      }),
+      partDayMonth()
+    );
+    expect(note).toBe(
+      "Fractions carry, but only within the year — FY2027's total above already counts the 0.2 days this month left unworked, and July is its last month, so nothing settles it later."
+    );
+    // isFinalMonth is a month comparison, not a clock reading: eleven presses of
+    // the next-month arrow reach a July that has not happened, so the sentence
+    // must not speak of the year as over.
+    expect(note).not.toContain("ended");
+  });
+
+  it("carries a whole-day remainder too — this is not a fraction-only note", () => {
+    expect(
+      fyCarryNote(
+        stats({
+          balancePoints: -200,
+          cumulativeOffice: 24,
+          remainingNeededPoints: 200,
+        }),
+        month(2)
+      )
+    ).toBe(
+      "Fractions carry — FY2027's total above already counts the 2 days this month left unworked, and settles it against a later month rather than raising next month's own target."
+    );
+  });
+
+  it("keeps the singular for exactly one unworked day", () => {
+    expect(
+      fyCarryNote(
+        stats({
+          balancePoints: -100,
+          cumulativeOffice: 25,
+          remainingNeededPoints: 100,
+        }),
+        month(1)
+      )
+    ).toContain("counts the 1 day this month left unworked");
   });
 });
 

@@ -752,3 +752,42 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     ? `${dayCount(owed, "office day", "office days")} short of FY${fy.fy}'s full year${windowNote}.`
     : `${dayCount(owed, "more office day", "more office days")} needed to be level.`;
 }
+
+/**
+ * Where a month's unpaid fraction went, or `null` when there is nothing to
+ * explain.
+ *
+ * Null unless the month has a remainder **and** the year is still owed. The
+ * second condition is not redundant: when the year is ahead, `fyVerdict`
+ * already reports the month's remainder as covered, and a note insisting it is
+ * still owed would argue with the sentence directly above it on screen.
+ *
+ * Not a clause bolted onto fyVerdict's eight branches — most of them have no
+ * month remainder to speak about, and the two that do already say their piece.
+ * A separate function is also a separate assertion.
+ *
+ * Copy lives here rather than in the component for the reason fyVerdict's does:
+ * Vitest runs without a DOM, so a string assembled inside JSX cannot be
+ * asserted.
+ */
+export function fyCarryNote(
+  fy: FyStats,
+  monthStats: MonthStats
+): string | null {
+  if (monthStats.remainingPoints === 0) return null;
+  if (fy.remainingNeededPoints === 0) return null;
+
+  const unworked = `${dayCount(
+    monthStats.remainingPoints,
+    "day",
+    "days"
+  )} this month left unworked`;
+
+  // `isFinalMonth` is a month comparison — monthKey === fyEndMonth — and reads
+  // no clock, so this branch is reachable for a July that has not happened.
+  // "July is its last month" is true either way; "the year ended short" is not.
+  if (fy.isFinalMonth) {
+    return `Fractions carry, but only within the year — FY${fy.fy}'s total above already counts the ${unworked}, and July is its last month, so nothing settles it later.`;
+  }
+  return `Fractions carry — FY${fy.fy}'s total above already counts the ${unworked}, and settles it against a later month rather than raising next month's own target.`;
+}
