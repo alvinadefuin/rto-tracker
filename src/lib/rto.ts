@@ -422,8 +422,9 @@ export function computeMonthStats(
   }
 
   // Percent-points, un-rounded: the employer computes 13 × 40% as 5.2 days, not
-  // 6. The financial year is where the fraction is finally settled, with a
-  // single Math.ceil in computeFyStats — never one per month.
+  // 6. The financial year is where the fraction is finally settled, and it does
+  // not round either — computeFyStats sums these points as they are, so a month
+  // that leaves 0.2 unworked is 0.2 owed for the year, not a whole day.
   const requiredPoints = eligibleDays * targetPercent;
   const remainingPoints = Math.max(0, requiredPoints - officeDays * 100);
   return {
@@ -642,10 +643,11 @@ const dayCount = (points: number, one: string, many: string) =>
  * The one sentence saying what the financial year still owes.
  *
  * Takes the whole `MonthStats` rather than its `remainingPoints` number: the
- * month's shortfall and the year's are different quantities in different units,
- * and a bare-number parameter would take `fy.remainingNeeded` — whole days —
- * without complaint and print a plausible wrong sentence. `FyStats` is not
- * assignable to `MonthStats`, so it cannot.
+ * month's shortfall and the year's are different quantities, and since the year
+ * stopped rounding they are in the same unit too — so a bare-number parameter
+ * would take `fy.remainingNeededPoints` without complaint and print a plausible
+ * wrong sentence, with no unit mismatch left to make it look wrong. `FyStats`
+ * is not assignable to `MonthStats`, so it cannot.
  *
  * Copy lives here rather than in the component because Vitest runs without a
  * DOM: eight branches are worth asserting, and in JSX they could not be.
@@ -668,8 +670,8 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     // year-to-date slice. Never word these three as if the year had ended.
     if (fy.isFinalMonth)
       return `${ahead} — FY${fy.fy} fully covered${windowNote}.`;
-    // The claim holds because cumulativeRequired already includes the displayed
-    // month's whole requirement: a non-negative balance means the month's
+    // The claim holds because cumulativeRequiredPoints already includes the displayed
+    // month's whole requirement: a non-negative balancePoints means the month's
     // remaining days are paid for. Do not "fix" the apparent contradiction of
     // "1 day ahead" next to "9 remaining days are covered".
     //
@@ -687,8 +689,9 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
 
   // After the surplus branch, deliberately: a 0% target period or a month of
   // leave reaches a zero requirement with days still banked, and the surplus is
-  // then the news. Reachable only with balance === 0, since balance equals
-  // cumulativeOffice when nothing is required — so no branch below is shadowed.
+  // then the news. Reachable only with balancePoints === 0, since balancePoints
+  // equals cumulativeOffice × 100 when nothing is required — so no branch below
+  // is shadowed.
   // Worded without naming a cause OR an eligibility count: a mandate, a month of
   // leave, and a 0% period all land here, and the last one has eligible days that
   // were counted and then weighted to zero.
