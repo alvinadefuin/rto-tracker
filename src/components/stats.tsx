@@ -2,6 +2,7 @@ import {
   DEFAULT_RTO_PERCENT,
   formatDays,
   formatMonth,
+  fyCarryNote,
   fyFillPercent,
   fyVerdict,
   monthMeter,
@@ -146,6 +147,7 @@ function FyBlock({
 }) {
   const { cumulativeOffice, cumulativeRequiredPoints, balancePoints } = fyStats;
   const fillPercent = fyFillPercent(fyStats);
+  const carryNote = fyCarryNote(fyStats, monthStats);
 
   // Its own landmark: this is a second subject inside "Progress", and the year
   // is the one a screen reader has no other way to skip to.
@@ -175,6 +177,7 @@ function FyBlock({
         </p>
       </div>
       <p className="text-sm text-fade">{fyVerdict(fyStats, monthStats)}</p>
+      {carryNote && <p className="text-sm text-fade">{carryNote}</p>}
     </section>
   );
 }
