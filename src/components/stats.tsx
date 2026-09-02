@@ -2,6 +2,7 @@ import {
   DEFAULT_RTO_PERCENT,
   formatDays,
   formatMonth,
+  fyFillPercent,
   fyVerdict,
   monthMeter,
   type FyStats,
@@ -144,19 +145,7 @@ function FyBlock({
   monthStats: MonthStats;
 }) {
   const { cumulativeOffice, cumulativeRequiredPoints, balancePoints } = fyStats;
-  // Full when nothing is required: an empty bar against a zero target would
-  // read as no progress rather than no obligation. Otherwise floor, not
-  // round: rounding renders 259/260 as a solid bar sitting directly above
-  // "1 office day short", so the bar reads full only when the year is met.
-  // Integer math on points, scaled by 10000 — no float divides a requirement
-  // the rest of the app keeps exact.
-  const fillPercent =
-    cumulativeRequiredPoints === 0
-      ? 100
-      : Math.min(
-          100,
-          Math.floor((cumulativeOffice * 10000) / cumulativeRequiredPoints)
-        );
+  const fillPercent = fyFillPercent(fyStats);
 
   // Its own landmark: this is a second subject inside "Progress", and the year
   // is the one a screen reader has no other way to skip to.

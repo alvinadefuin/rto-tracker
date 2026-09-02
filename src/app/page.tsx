@@ -156,7 +156,7 @@ export default async function Home({
 
   // Two numbers, not the earlier months' entries: only the displayed month is
   // editable from here, so everything before it is constant for the life of the
-  // mount and the client can re-run the single ceil on its own.
+  // mount and the client can re-run the same points arithmetic on its own.
   const fyBaseline: FyBaseline | null =
     windowStart === null
       ? null

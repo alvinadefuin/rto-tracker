@@ -27,6 +27,7 @@ import {
   aggregateMonths,
   fyWindowStart,
   computeFyStats,
+  fyFillPercent,
   fyVerdict,
   monthMeter,
   type Entries,
@@ -1009,7 +1010,8 @@ describe("computeFyStats", () => {
     const july = computeMonthStats(2027, 7, {}, 40);
     const fy = computeFyStats("2027-07", baseline(prior), july);
     expect(formatDays(july.requiredPoints)).toBe("8.8"); // the month alone asks for 8.8
-    expect(fy.cumulativeRequiredPoints).toBe(1980); // 1100 + 880, never ceil'd up to 20
+    // 1100 + 880, never ceil'd up to 20.
+    expect(fy.cumulativeRequiredPoints).toBe(1980);
     expect(fy.cumulativeOffice).toBe(20);
     // The old ceil called this exactly level. The year really owes 19.8, so the
     // twentieth stamp is a 0.2 surplus, and the FY is where it is credited.
@@ -1093,76 +1095,95 @@ describe("computeFyStats", () => {
     expect(at105.balancePoints).toBe(60); // 0.6 banked, where ceil reported 0
   });
 
-  it("agrees with the old ceil on whether the year is owed, at every count", () => {
-    // The property the whole change rests on: for an integer day count,
-    // `office × 100 ≥ P` is exactly `office ≥ ceil(P / 100)`. Swept either side
-    // of a fractional requirement so it is asserted rather than argued — this
-    // is what keeps owedForYear's colour muting in stats.tsx unchanged.
-    const july = computeMonthStats(2027, 7, {}, 0); // 0% — contributes nothing
-    for (let officeDays = 100; officeDays <= 110; officeDays++) {
-      const fy = computeFyStats(
-        "2027-07",
-        baseline({ officeDays, weightedEligible: 10440 }),
-        july
-      );
-      const oldCeilSaidOwed = officeDays < Math.ceil(10440 / 100);
-      expect(fy.remainingNeededPoints > 0).toBe(oldCeilSaidOwed);
+  it(
+    "agrees with the old ceil on whether the year is owed, at every count",
+    () => {
+      // The property the whole change rests on: for an integer day count,
+      // `office × 100 ≥ P` is exactly `office ≥ ceil(P / 100)`. Swept across
+      // a whole requirement and two fractional ones, and either side of each,
+      // so it is asserted rather than argued — this is what keeps
+      // owedForYear's colour muting in stats.tsx unchanged.
+      const july = computeMonthStats(2027, 7, {}, 0); // 0% — no contribution
+      for (const weightedEligible of [10400, 10440, 10499]) {
+        for (let officeDays = 100; officeDays <= 110; officeDays++) {
+          const fy = computeFyStats(
+            "2027-07",
+            baseline({ officeDays, weightedEligible }),
+            july
+          );
+          const oldCeilSaidOwed =
+            officeDays < Math.ceil(weightedEligible / 100);
+          expect(fy.remainingNeededPoints > 0).toBe(oldCeilSaidOwed);
+        }
+      }
     }
-  });
+  );
 
-  it("reports a part-day shortfall rather than rounding it to a whole day", () => {
-    // August: 13 eligible at 40% is 5.2 owed, 5 stamped. Viewed from September,
-    // the year says 0.2 — the number the month card showed, not a whole day.
-    const september = computeMonthStats(2026, 9, {}, 0); // 0% — contributes nothing
-    const fy = computeFyStats(
-      "2026-09",
-      baseline({ officeDays: 5, weightedEligible: 520 }),
-      september
-    );
-    expect(fy.cumulativeRequiredPoints).toBe(520);
-    expect(fy.balancePoints).toBe(-20);
-    expect(formatDays(fy.remainingNeededPoints)).toBe("0.2");
-  });
+  it(
+    "reports a part-day shortfall rather than rounding it to a whole day",
+    () => {
+      // August: 13 eligible at 40% is 5.2 owed, 5 stamped. Viewed from
+      // September, the year says 0.2 — the number the month card showed, not
+      // a whole day.
+      // 0% — no contribution
+      const september = computeMonthStats(2026, 9, {}, 0);
+      const fy = computeFyStats(
+        "2026-09",
+        baseline({ officeDays: 5, weightedEligible: 520 }),
+        september
+      );
+      expect(fy.cumulativeRequiredPoints).toBe(520);
+      expect(fy.balancePoints).toBe(-20);
+      expect(formatDays(fy.remainingNeededPoints)).toBe("0.2");
+    }
+  );
 });
 
+// Shared by describe("fyVerdict") and describe("fyFillPercent") below — both
+// exercise FyStats-shaped fixtures, and a single stats() keeps their defaults
+// (a 3-day surplus, FY2027, a whole month behind it) from drifting apart.
+function stats(overrides: Partial<FyStats> = {}): FyStats {
+  return {
+    fy: 2027,
+    fyStartMonth: "2026-08",
+    fyEndMonth: "2027-07",
+    windowStartMonth: "2026-08",
+    isPartialWindow: false,
+    isFinalMonth: false,
+    cumulativeOffice: 29,
+    cumulativeRequiredPoints: 2600,
+    balancePoints: 300,
+    remainingNeededPoints: 0,
+    ...overrides,
+  };
+}
+
+// Only the remaining figure is read; the rest is filler to make a whole
+// MonthStats. officeDays and remainingPoints are kept consistent with
+// requiredPoints so the fixture cannot describe a month that
+// computeMonthStats could never produce.
+function month(remainingDays: number): MonthStats {
+  return {
+    eligibleDays: 22,
+    officeDays: 11 - remainingDays,
+    requiredPoints: 1100,
+    remainingPoints: remainingDays * 100,
+    targetPercent: 50,
+    achievedPercent: 0,
+    mandatedDays: 0,
+    weeks: [],
+  };
+}
+
 describe("fyVerdict", () => {
-  function stats(overrides: Partial<FyStats> = {}): FyStats {
-    return {
-      fy: 2027,
-      fyStartMonth: "2026-08",
-      fyEndMonth: "2027-07",
-      windowStartMonth: "2026-08",
-      isPartialWindow: false,
-      isFinalMonth: false,
-      cumulativeOffice: 29,
-      cumulativeRequiredPoints: 2600,
-      balancePoints: 300,
-      remainingNeededPoints: 0,
-      ...overrides,
-    };
-  }
-
-  // Only the remaining figure is read; the rest is filler to make a whole
-  // MonthStats. officeDays and remainingPoints are kept consistent with
-  // requiredPoints so the fixture cannot describe a month that
-  // computeMonthStats could never produce.
-  function month(remainingDays: number): MonthStats {
-    return {
-      eligibleDays: 22,
-      officeDays: 11 - remainingDays,
-      requiredPoints: 1100,
-      remainingPoints: remainingDays * 100,
-      targetPercent: 50,
-      achievedPercent: 0,
-      mandatedDays: 0,
-      weeks: [],
-    };
-  }
-
   it("says nothing was required without blaming a mandate", () => {
     expect(
       fyVerdict(
-        stats({ cumulativeRequiredPoints: 0, cumulativeOffice: 0, balancePoints: 0 }),
+        stats({
+          cumulativeRequiredPoints: 0,
+          cumulativeOffice: 0,
+          balancePoints: 0,
+        }),
         month(0)
       )
     ).toBe("No requirement — the year owes nothing.");
@@ -1173,7 +1194,11 @@ describe("fyVerdict", () => {
     // stamped. The surplus is the news, not the absent requirement.
     expect(
       fyVerdict(
-        stats({ cumulativeRequiredPoints: 0, cumulativeOffice: 3, balancePoints: 300 }),
+        stats({
+          cumulativeRequiredPoints: 0,
+          cumulativeOffice: 3,
+          balancePoints: 300,
+        }),
         month(0)
       )
     ).toBe("3 days ahead — banked toward later months.");
@@ -1183,6 +1208,22 @@ describe("fyVerdict", () => {
     expect(fyVerdict(stats({ isFinalMonth: true }), month(0))).toBe(
       "3 days ahead — FY2027 fully covered."
     );
+  });
+
+  it("covers the year on a sub-day surplus in July", () => {
+    // 19.8 owed, 20 stamped: the year is covered by 0.2, which the old ceil
+    // reported as exactly level.
+    expect(
+      fyVerdict(
+        stats({
+          balancePoints: 20,
+          cumulativeOffice: 20,
+          cumulativeRequiredPoints: 1980,
+          isFinalMonth: true,
+        }),
+        month(0)
+      )
+    ).toBe("0.2 days ahead — FY2027 fully covered.");
   });
 
   it("says the surplus covers the month's remaining days", () => {
@@ -1246,7 +1287,11 @@ describe("fyVerdict", () => {
   it("asks for the shortfall mid-year", () => {
     expect(
       fyVerdict(
-        stats({ balancePoints: -200, cumulativeOffice: 24, remainingNeededPoints: 200 }),
+        stats({
+          balancePoints: -200,
+          cumulativeOffice: 24,
+          remainingNeededPoints: 200,
+        }),
         month(2)
       )
     ).toBe("2 more office days needed to be level.");
@@ -1406,6 +1451,69 @@ describe("fyVerdict", () => {
         month(0)
       )
     ).toBe("0.4 office days short of FY2027's full year.");
+  });
+});
+
+describe("fyFillPercent", () => {
+  it("draws a full bar when nothing is required", () => {
+    // An empty bar against a zero target would read as no progress rather than
+    // no obligation — and this is the only input that would divide by zero.
+    expect(
+      fyFillPercent(
+        stats({
+          cumulativeRequiredPoints: 0,
+          cumulativeOffice: 0,
+          balancePoints: 0,
+        })
+      )
+    ).toBe(100);
+  });
+
+  it("floors a partial year rather than flattering it", () => {
+    // 5 stamped against 5.2 owed is 96%. The old ceil drew this at
+    // floor(5/6) = 83%, understating a year that is nearly met.
+    expect(
+      fyFillPercent(
+        stats({
+          cumulativeOffice: 5,
+          cumulativeRequiredPoints: 520,
+          balancePoints: -20,
+          remainingNeededPoints: 20,
+        })
+      )
+    ).toBe(96);
+  });
+
+  it("clamps a sub-day surplus that computes past 100", () => {
+    // 20 stamped against 19.8 owed is 101.01…, where the old ceil gave exactly
+    // 100. The clamp became load-bearing when the year stopped rounding.
+    expect(
+      fyFillPercent(
+        stats({
+          cumulativeOffice: 20,
+          cumulativeRequiredPoints: 1980,
+          balancePoints: 20,
+        })
+      )
+    ).toBe(100);
+  });
+
+  it("reads full exactly when the year is met, and never before", () => {
+    // The invariant the floor exists to protect: no solid bar above a sentence
+    // saying days are still owed. Swept across a whole requirement and two
+    // fractional ones — the whole case is where the comparison flips from > to
+    // >=, and a single fixture cannot reach it.
+    for (const points of [10400, 10440, 10499]) {
+      for (let officeDays = 100; officeDays <= 110; officeDays++) {
+        const fy = stats({
+          cumulativeOffice: officeDays,
+          cumulativeRequiredPoints: points,
+          balancePoints: officeDays * 100 - points,
+          remainingNeededPoints: Math.max(0, points - officeDays * 100),
+        });
+        expect(fyFillPercent(fy) === 100).toBe(fy.remainingNeededPoints === 0);
+      }
+    }
   });
 });
 
@@ -1693,7 +1801,8 @@ describe("the financial year sums fractional months without rounding", () => {
 
     expect(month.requiredPoints).toBe(520);
     expect(formatDays(month.requiredPoints)).toBe("5.2"); // the month does not round
-    expect(fy.cumulativeRequiredPoints).toBe(1040); // 520 + 520, exactly 10.4 days
+    // 520 + 520, exactly 10.4 days.
+    expect(fy.cumulativeRequiredPoints).toBe(1040);
 
     const monthlySum = 2 * Math.ceil(520 / 100);
     expect(monthlySum).toBe(12);

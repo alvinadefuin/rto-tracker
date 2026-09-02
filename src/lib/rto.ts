@@ -561,7 +561,14 @@ export interface FyStats {
   windowStartMonth: string;
   isPartialWindow: boolean; // windowStartMonth > fyStartMonth
   isFinalMonth: boolean; // monthKey === fyEndMonth
-  /** Whole office days stamped across the window — a tally of stamps, not points. */
+  /**
+   * Whole office days stamped across the window — a tally of stamps, not
+   * points. The only field here without a unit in its name, deliberately and
+   * symmetrically with `MonthStats.officeDays` sitting beside `requiredPoints`:
+   * a stamp count has no fraction to lose. It is the one quantity that has to
+   * be scaled at the point it meets the others, which `computeFyStats` and
+   * `fyFillPercent` each do exactly once.
+   */
   cumulativeOffice: number;
   /**
    * Σ of each counted month's `requiredPoints`, in integer percent-points and
@@ -627,6 +634,41 @@ export function computeFyStats(
 }
 
 /**
+ * How full to draw the year's bar, as a whole percent 0..100.
+ *
+ * Lives here rather than in the component that draws it for the reason
+ * monthMeter gives: Vitest runs without a DOM, so arithmetic inside JSX would
+ * ship untested. There are four decisions in these five lines and one of them
+ * is not obviously correct, which is more than enough to earn assertions.
+ *
+ * Full when nothing is required: an empty bar against a zero target reads as no
+ * progress rather than no obligation, and it is also the only input that would
+ * divide by zero.
+ *
+ * Otherwise floor, not round: rounding renders 259/260 as a solid bar sitting
+ * directly above "1 office day short". Flooring makes the bar read full exactly
+ * when the year is met — `=== 100` iff `remainingNeededPoints === 0`, in both
+ * directions.
+ *
+ * The clamp is load-bearing, and more so since the year stopped rounding: a
+ * sub-day surplus — 20 stamped against 19.8 owed — computes 101, where the old
+ * `ceil` produced exactly 100.
+ *
+ * `× 100 × 100` rather than `× 10000` to keep the algebra legible: days to
+ * points, then points to percent. The floor cannot be off by one at these
+ * magnitudes — the numerator is at most ~2.6e6, so a non-integral quotient sits
+ * at least `1/P ≈ 4e-5` from an integer, orders of magnitude above double
+ * epsilon.
+ */
+export function fyFillPercent(fy: FyStats): number {
+  if (fy.cumulativeRequiredPoints === 0) return 100;
+  return Math.min(
+    100,
+    Math.floor((fy.cumulativeOffice * 100 * 100) / fy.cumulativeRequiredPoints)
+  );
+}
+
+/**
  * Percent-points as a counted noun: `100` → "1 day", `20` → "0.2 days",
  * `250` → "2.5 days".
  *
@@ -670,10 +712,10 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
     // year-to-date slice. Never word these three as if the year had ended.
     if (fy.isFinalMonth)
       return `${ahead} — FY${fy.fy} fully covered${windowNote}.`;
-    // The claim holds because cumulativeRequiredPoints already includes the displayed
-    // month's whole requirement: a non-negative balancePoints means the month's
-    // remaining days are paid for. Do not "fix" the apparent contradiction of
-    // "1 day ahead" next to "9 remaining days are covered".
+    // The claim holds because cumulativeRequiredPoints already includes the
+    // displayed month's whole requirement: a non-negative balancePoints means
+    // the month's remaining days are paid for. Do not "fix" the apparent
+    // contradiction of "1 day ahead" next to "9 remaining days are covered".
     //
     // Points, not the fractional day: the month's shortfall can be 0.2, so
     // both the comparison and the number formatting have to be exact.
