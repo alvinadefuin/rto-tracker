@@ -176,7 +176,20 @@ function FyBlock({
           )}
         </p>
       </div>
-      <p className="text-sm text-fade">{fyVerdict(fyStats, monthStats)}</p>
+      {/* text-ink, not text-fade: three fade paragraphs in a row (header,
+          verdict, note) leave this block with no typographic hierarchy, and
+          the note runs ~200 characters against this sentence's ~40 — so the
+          long caption already reads as secondary. Darkening the short,
+          actionable line restores the hierarchy without shrinking anything.
+          It also fixes a contrast failure this line had on its own:
+          --color-fade on --color-paper is 3.36:1, under the 4.5:1 WCAG AA
+          floor for normal text, where --color-ink is 12.89:1. This is the
+          sentence carrying the number to act on — ADR 0005 already calls it
+          "the actionable one" — and fade contradicted that. The remaining
+          fade captions elsewhere in the app share the same contrast shortfall;
+          that is a pre-existing issue with the token, not something fixed by
+          changing this one line. */}
+      <p className="text-sm text-ink">{fyVerdict(fyStats, monthStats)}</p>
       {carryNote && <p className="text-sm text-fade">{carryNote}</p>}
     </section>
   );
