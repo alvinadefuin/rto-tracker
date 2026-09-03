@@ -587,7 +587,10 @@ export interface FyStats {
    * year stopped rounding: for an integer day count,
    * `cumulativeOffice × 100 < P` iff `cumulativeOffice < ceil(P / 100)`. So
    * every boolean keyed off "is the year owed" — `owedForYear` in stats.tsx
-   * above all — kept its behaviour; only the magnitude reported got finer.
+   * above all — kept its behaviour; only the magnitude reported got finer, and
+   * the level/ahead split moved with it: a whole day stamped against a
+   * fractional requirement now reads as a small surplus where it used to read
+   * as exactly level.
    */
   remainingNeededPoints: number;
 }
@@ -692,7 +695,7 @@ const dayCount = (points: number, one: string, many: string) =>
  * is not assignable to `MonthStats`, so it cannot.
  *
  * Copy lives here rather than in the component because Vitest runs without a
- * DOM: eight branches are worth asserting, and in JSX they could not be.
+ * DOM: nine branches are worth asserting, and in JSX they could not be.
  */
 export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
   // Only the branches that name the year carry this: "FY2027 fully covered"
@@ -779,9 +782,18 @@ export function fyVerdict(fy: FyStats, monthStats: MonthStats): string {
  * already reports the month's remainder as covered, and a note insisting it is
  * still owed would argue with the sentence directly above it on screen.
  *
- * Not a clause bolted onto fyVerdict's eight branches — most of them have no
+ * Not a clause bolted onto fyVerdict's nine branches — most of them have no
  * month remainder to speak about, and the two that do already say their piece.
  * A separate function is also a separate assertion.
+ *
+ * Names the year twice and, unlike fyVerdict's covered/short branches, appends
+ * no `(counted from …)` qualifier for a partial window — deliberately, not an
+ * omission. This sentence makes no claim about the year being covered or
+ * short, only about where a shortfall went, so there is no year-completeness
+ * claim here for a partial window to qualify. The block's header line above it
+ * on screen already discloses the window. Add the qualifier and a reader would
+ * reasonably infer this sentence is asserting something about year completion
+ * that it never was.
  *
  * Copy lives here rather than in the component for the reason fyVerdict's does:
  * Vitest runs without a DOM, so a string assembled inside JSX cannot be

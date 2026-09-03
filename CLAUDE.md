@@ -204,7 +204,9 @@ Rounding per month instead costs about six office days a year, so never round a 
 `requiredPoints` to whole days and sum those. Dropping the year's `ceil` (ADR 0007)
 moved no verdict boundary: for an integer day count, `office × 100 ≥ P` iff
 `office ≥ ceil(P / 100)`, so a year owing 104.4 still takes 105 whole days to clear —
-only the reported magnitude got finer. `fyCarryNote` is the one sentence that says so.
+only the reported magnitude got finer, and the level/ahead split moved with it: a whole
+day stamped against a fractional requirement now reads as a small surplus where it used
+to read as exactly level. `fyCarryNote` is the one sentence that says so.
 
 **The FY on screen follows the displayed month; the clock is read once, to choose the
 default month.** `financialYearOf` takes a month key for the same reason today's date is

@@ -1555,15 +1555,22 @@ describe("fyCarryNote", () => {
     // The invariant, asserted across both functions: the byte-for-byte string
     // tests above cannot catch fyVerdict's "covered" clause being reworded,
     // which would leave the month's remainder unexplained by either sentence.
-    for (const balancePoints of [-100, 0, 100]) {
-      const fy = stats({
-        balancePoints,
-        cumulativeOffice: 26 + balancePoints / 100,
-        remainingNeededPoints: Math.max(0, -balancePoints),
-      });
-      expect(fyVerdict(fy, partDayMonth()).includes("covered")).toBe(
-        fyCarryNote(fy, partDayMonth()) === null
-      );
+    // The sweep spans both month positions, not just a non-final one: July has
+    // its own pair of "covered" sentences — "fully covered" and "covered
+    // exactly" — reachable only when isFinalMonth is true, and those are
+    // exactly the two a rewording would most plausibly touch first.
+    for (const isFinalMonth of [false, true]) {
+      for (const balancePoints of [-100, 0, 100]) {
+        const fy = stats({
+          isFinalMonth,
+          balancePoints,
+          cumulativeOffice: 26 + balancePoints / 100,
+          remainingNeededPoints: Math.max(0, -balancePoints),
+        });
+        expect(fyVerdict(fy, partDayMonth()).includes("covered")).toBe(
+          fyCarryNote(fy, partDayMonth()) === null
+        );
+      }
     }
   });
 

@@ -79,7 +79,11 @@ Rejected alternatives:
   ahead or slightly behind, which is what they are.
 - The FY bar gets more accurate as a side effect: 5 stamped against 5.2 was drawn
   at `floor(5/6) = 83%` and is now 96%. Its `floor` and its `=== 0 → 100%` guard
-  both stay, for the reasons already commented at the call site.
+  both stay, for the reasons already commented on `fyFillPercent` in `src/lib/rto.ts`.
+- The FY bar's fill arithmetic moved out of `src/components/stats.tsx` and into
+  `fyFillPercent` in `src/lib/rto.ts`, following the rule `monthMeter` and
+  `fyVerdict` already stated: Vitest runs without a DOM, so arithmetic left in
+  JSX ships untested. `stats.tsx` is now a bare call with no comment of its own.
 - A final month can now report a sub-day shortfall — "0.4 office days short of
   FY2027's full year" — where clearing it takes a whole day. The verdict states
   the size of the debt and the carry note states that the year ends in July;
