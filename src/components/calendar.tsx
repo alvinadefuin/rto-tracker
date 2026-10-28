@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 import { setDayStatus } from "@/app/actions";
 import {
   computeFyStats,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/rto";
 import { Stats } from "@/components/stats";
 import { Toast } from "@/components/toast";
+import { useToday } from "@/lib/use-today";
 
 const CYCLE: (DayStatus | null)[] = [
   null,
@@ -118,14 +119,7 @@ export function Calendar({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Server renders no "today" highlight; the client fills it in on hydration.
-  const today = useSyncExternalStore(
-    () => () => {},
-    () => {
-      const now = new Date();
-      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    },
-    () => null
-  );
+  const today = useToday();
 
   const [year, month] = monthKey.split("-").map(Number);
   const stats = computeMonthStats(year, month, entries, targetPercent, mandates);
