@@ -18,8 +18,13 @@ export function TodayLink({ monthKey }: { monthKey: string }) {
 
   if (target === monthKey) {
     return (
-      <span aria-current="date" className={`${BOX} text-fade`}>
-        Today
+      <span
+        aria-current="date"
+        aria-label="Current month"
+        title="Current month"
+        className={`${BOX} text-fade`}
+      >
+        ●
       </span>
     );
   }
@@ -27,9 +32,11 @@ export function TodayLink({ monthKey }: { monthKey: string }) {
   return (
     <Link
       href={target ? `/?m=${target}` : "/"}
+      aria-label="Current month"
+      title="Current month"
       className={`${BOX} hover:bg-ink/5`}
     >
-      Today
+      ●
     </Link>
   );
 }

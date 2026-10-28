@@ -39,7 +39,7 @@ client component rendered in the `<nav>` of `page.tsx` between ← and →.
   (`aria-current="date"`) rather than a link, since there is nowhere to go.
 - Styling matches the arrows: `border border-rule px-3 py-1.5 font-mono text-sm`,
   with `hover:bg-ink/5` on the link and `text-fade` on the inert state.
-- Label: `Today`.
+- Label: a `●` glyph, matching the text arrows, with `aria-label` and `title` "Current month" since the glyph carries no words.
 
 `page.tsx` stays a server component; only the button is a client island.
 
