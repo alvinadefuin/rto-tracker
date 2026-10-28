@@ -20,6 +20,7 @@ import {
 } from "@/lib/rto";
 import { currentMonthKey } from "@/lib/clock";
 import { Calendar } from "@/components/calendar";
+import { TodayLink } from "@/components/today-link";
 
 const MONTH_NAMES = [
   "January",
@@ -211,6 +212,7 @@ export default async function Home({
             >
               ←
             </Link>
+            <TodayLink monthKey={monthKey} />
             <Link
               href={`/?m=${shiftMonthKey(monthKey, 1)}`}
               aria-label="Next month"
