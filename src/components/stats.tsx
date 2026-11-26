@@ -1,18 +1,21 @@
 import {
   DEFAULT_RTO_PERCENT,
+  coveredNote,
   formatDays,
   formatMonth,
   fyCarryNote,
   fyFillPercent,
   fyVerdict,
   monthMeter,
+  priorBalancePoints,
   type FyStats,
   type MonthStats,
 } from "@/lib/rto";
 
 // Stamp-card meter — one ring per required office day, rounded up, filled as
 // stamped; a fractional requirement leaves its last ring drawn short until a
-// stamp fills it — with the financial year's running position underneath.
+// stamp fills it, and rings a surplus from earlier in the year already settles
+// are drawn dashed — with the financial year's running position underneath.
 export function Stats({
   stats,
   fyStats,
@@ -50,7 +53,12 @@ function MonthBlock({
   } = stats;
   // Derived in src/lib/rto.ts, where Vitest can assert it — not inline here,
   // where it could not be. That file carries the reasoning behind each number.
-  const { slots, partialSlot, filled, extra } = monthMeter(stats);
+  const meter = monthMeter(
+    stats,
+    fyStats ? priorBalancePoints(fyStats, stats) : 0
+  );
+  const { slots, partialSlot, filled, extra, covered } = meter;
+  const covers = coveredNote(meter);
 
   // Nothing was owed this month. Rendering zero rings and "0/0 stamped ·
   // target met · 0%" would read as a bug, so say why instead.
@@ -79,18 +87,27 @@ function MonthBlock({
         <div className="flex items-center gap-1.5" aria-hidden>
           {Array.from({ length: slots }, (_, i) => {
             const stamped = i < filled;
+            // Settled by a surplus from earlier in the year. Dashed holiday
+            // green — the colour "target met" uses — and hollow, so it never
+            // reads as a stamp. A stamp beats a cover: stamping past the gap
+            // draws a stamp here.
+            const isCovered = !stamped && i >= slots - covered;
             // The final slot can be worth less than a whole day. Show how much
             // rather than drawing a full ring the month never has to fill.
             // Drawn in fade, not stamp: this is the size of the obligation, not
-            // progress against it — and it disappears once a stamp lands on it.
-            const partial = !stamped && partialSlot > 0 && i === slots - 1;
+            // progress against it — and it disappears once a stamp lands on it,
+            // or once a surplus covers it.
+            const partial =
+              !stamped && !isCovered && partialSlot > 0 && i === slots - 1;
             return (
               <span
                 key={i}
                 className={`inline-block size-4 rounded-full border-2 ${
                   stamped
                     ? "border-stamp bg-stamp"
-                    : "border-fade/60 bg-transparent"
+                    : isCovered
+                      ? "border-dashed border-holiday bg-transparent"
+                      : "border-fade/60 bg-transparent"
                 }`}
                 style={
                   partial
@@ -132,7 +149,8 @@ function MonthBlock({
             (adjusted from {DEFAULT_RTO_PERCENT}%)
           </span>
         )}
-        {mandatedDays > 0 && <> · {mandatedDays} days mandated WFH</>}.
+        {mandatedDays > 0 && <> · {mandatedDays} days mandated WFH</>}
+        {covers && <> · {covers}</>}.
       </p>
     </div>
   );
