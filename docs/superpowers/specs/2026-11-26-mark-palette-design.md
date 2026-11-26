@@ -1,7 +1,7 @@
 # Mark palette
 
 **Date:** 2026-11-26
-**Status:** approved
+**Status:** implemented
 
 ## Why
 
