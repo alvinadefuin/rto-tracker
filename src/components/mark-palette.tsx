@@ -60,7 +60,7 @@ export function MarkPalette({
             type="button"
             aria-pressed={on}
             onClick={() => onSelect(on ? null : mark)}
-            className={`flex items-center gap-1.5 border px-2.5 py-1.5 font-mono text-[11px] tracking-widest uppercase uppercase text-ink transition-colors ${
+            className={`flex items-center gap-1.5 border px-2.5 py-1.5 font-mono text-[11px] tracking-widest uppercase text-ink transition-colors ${
               on ? MARK_ACTIVE[mark] : "border-rule bg-paper hover:bg-ink/5"
             }`}
           >
