@@ -22,13 +22,31 @@ the arithmetic are untouched. No migration, no ADR.
 
 **Five marks, one active at a time.**
 
-| Mark     | Icon        | Colour token | Writes       |
-|----------|-------------|--------------|--------------|
-| Office   | building    | `stamp`      | `"office"`   |
-| Leave    | tree        | `leave`      | `"leave"`    |
-| Holiday  | wine glass  | `holiday`    | `"holiday"`  |
-| Training | book        | `training`   | `"training"` |
-| Erase    | eraser      | `fade`       | `null`       |
+| Mark     | Icon        | Colour token           | Writes       |
+|----------|-------------|------------------------|--------------|
+| Office   | building    | `stamp` `#be3b2e`      | `"office"`   |
+| Leave    | tree        | `leave` → `#3e7a57`    | `"leave"`    |
+| Holiday  | wine glass  | `holiday` → `#8a3a5c`  | `"holiday"`  |
+| Training | book        | `training` `#8a6220`   | `"training"` |
+| Erase    | eraser      | `fade` `#82877d`       | `null`       |
+
+**Icons are hand-drawn inline SVG, never emoji** — emoji render differently on
+every platform and ignore the palette. Each icon is two-tone: a 1.5px stroke
+in its token and a fill of `color-mix(in srgb, <token> 18%, transparent)`, so
+it reads as a small illustration rather than a line icon. If the fill muddies
+at cell size, drop it in cells and keep it in the palette.
+
+**Colours follow the icons.** A tree reads green, so `leave` takes the green
+`holiday` had; `holiday` becomes a wine plum, `#8a3a5c` (6.75:1 on `paper`,
+clearing the 4.5:1 text floor its siblings sit at 4.6–5.0). The old slate
+`#5a6b8c` retires. Office stays stamp red — the colour of the day that
+counts — and training stays ochre. Existing leave and holiday rows, imported
+holidays included, change colour; the `@theme` comment records the swap.
+`fade` (3.36:1) is used only for the Erase button's icon, never as text, and
+never appears in a cell.
+
+The active palette button takes a solid border in its token and a tinted
+background of the same mix; inactive buttons are `ink` on `paper`.
 
 The active mark is `Mark = DayStatus | "erase"`, held as `Mark | null`.
 Tapping the active palette button deselects it; tapping another switches to
@@ -52,7 +70,8 @@ the palette pulses once and a toast reads "Pick a mark above first."
 **Components.**
 
 - `src/components/status-icons.tsx` — one inline SVG per mark, stroked in
-  `currentColor`, `aria-hidden`. No icon dependency.
+  `currentColor` with the tinted fill above, `aria-hidden`. No icon
+  dependency, no emoji.
 - `src/components/mark-palette.tsx` — five buttons, icon plus label, each with
   `aria-pressed`. Stateless: takes `active`, `onSelect` and a `pulse` flag.
 - `src/components/calendar-board.tsx` — new client wrapper. Owns the active
@@ -92,4 +111,5 @@ mandate sentence stays.
   switch to Leave and overwrite an office day; Erase a day; tap with no mark
   and see the pulse and toast with nothing saved; change month and confirm
   the mark is still active; press Escape to deselect; confirm a stamp on a
-  mandated day still renders faded.
+  mandated day still renders faded; check each icon at cell size on a phone
+  width and in the palette.
