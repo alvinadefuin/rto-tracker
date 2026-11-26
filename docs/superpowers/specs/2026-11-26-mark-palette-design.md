@@ -42,6 +42,10 @@ clearing the 4.5:1 text floor its siblings sit at 4.6–5.0). The old slate
 `#5a6b8c` retires. Office stays stamp red — the colour of the day that
 counts — and training stays ochre. Existing leave and holiday rows, imported
 holidays included, change colour; the `@theme` comment records the swap.
+
+`stats.tsx` used `holiday` as its "ahead" green (covered rings, "target
+met"). Those move to a new `credit` token holding the same green, so a
+verdict colour no longer moves with a status colour.
 `fade` (3.36:1) is used only for the Erase button's icon, never as text, and
 never appears in a cell.
 

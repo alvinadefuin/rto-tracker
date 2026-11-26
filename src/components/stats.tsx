@@ -87,7 +87,7 @@ function MonthBlock({
         <div className="flex items-center gap-1.5" aria-hidden>
           {Array.from({ length: slots }, (_, i) => {
             const stamped = i < filled;
-            // Settled by a surplus from earlier in the year. Dashed holiday
+            // Settled by a surplus from earlier in the year. Dashed credit
             // green — the colour "target met" uses — and hollow, so it never
             // reads as a stamp. A stamp beats a cover: stamping past the gap
             // draws a stamp here.
@@ -106,7 +106,7 @@ function MonthBlock({
                   stamped
                     ? "border-stamp bg-stamp"
                     : isCovered
-                      ? "border-dashed border-holiday bg-transparent"
+                      ? "border-dashed border-credit bg-transparent"
                       : "border-fade/60 bg-transparent"
                 }`}
                 style={
@@ -133,7 +133,7 @@ function MonthBlock({
             // The mirror of the line above, and the more dangerous misread of
             // the two: "target met" in green directly above "17 more office
             // days needed to be level". The words stay; only the colour defers.
-            <span className={owedForYear ? "text-fade" : "text-holiday"}>
+            <span className={owedForYear ? "text-fade" : "text-credit"}>
               target met
             </span>
           )}{" "}

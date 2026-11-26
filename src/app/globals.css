@@ -5,8 +5,15 @@
   --color-ink: #1e2b45;
   --color-rule: #d6d8cf;
   --color-stamp: #be3b2e;
-  --color-leave: #5a6b8c;
-  --color-holiday: #3e7a57;
+  /* Each status colour follows its palette icon: a tree reads green, a wine
+     glass wine. Leave took holiday's former green; the old slate #5a6b8c
+     retired. Holiday's wine is 6.75:1 on paper, over the 4.5:1 text floor. */
+  --color-leave: #3e7a57;
+  --color-holiday: #8a3a5c;
+  /* "Ahead of the year": covered rings and "target met". The same green as
+     leave, but a separate token — it is a verdict, not a status, and must not
+     move when a status colour does. */
+  --color-credit: #3e7a57;
   /* Ochre, darkened from #a4762b (3.68:1) to clear the 4.5:1 text floor —
      it renders as 10px uppercase mono, so the 3:1 non-text floor that
      --color-fade sits on does not apply. 4.98:1, in the same band as its
@@ -54,6 +61,30 @@ a:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .stamp-in {
+    animation: none;
+  }
+}
+
+/* Two-tone marks: the fill is the stroke's own colour, thinned. A class, not a
+   fill attribute, because color-mix is not valid in a presentation attribute. */
+.icon-tint {
+  fill: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+/* A tap with no mark selected points at the palette instead of doing nothing
+   silently. Retriggered by remounting the toolbar with a new key. */
+.palette-pulse {
+  animation: palette-pulse 600ms ease-out;
+}
+
+@keyframes palette-pulse {
+  30% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-ink) 20%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .palette-pulse {
     animation: none;
   }
 }
