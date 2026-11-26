@@ -19,7 +19,7 @@ import {
   type FyBaseline,
 } from "@/lib/rto";
 import { currentMonthKey } from "@/lib/clock";
-import { Calendar } from "@/components/calendar";
+import { CalendarBoard } from "@/components/calendar-board";
 import { TodayLink } from "@/components/today-link";
 
 const MONTH_NAMES = [
@@ -237,12 +237,8 @@ export default async function Home({
         )}
       </header>
 
-      {/* Keyed by month: search-param navigation re-renders rather than
-          remounts, and Calendar seeds its state from initialEntries only on
-          mount. Without the key, sliding months keeps the previous month's
-          entries and the new month renders blank. */}
-      <Calendar
-        key={monthKey}
+      {/* CalendarBoard keys Calendar by month; see the comment there. */}
+      <CalendarBoard
         monthKey={monthKey}
         initialEntries={monthEntries}
         holidays={monthHolidays}
