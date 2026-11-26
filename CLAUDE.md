@@ -238,12 +238,15 @@ before the displayed month — and hands `<Calendar>` a plain `Entries` map of j
 month's rows, the month's `ph_holidays` rows, and the `FyBaseline` for the months
 before it.
 
-**`<Calendar>` must keep its `key={monthKey}`.** Next does not remount on search-param
-changes, and Calendar seeds its state from `initialEntries` only on mount — so without the
-key, sliding months keeps the previous month's entries and the new month renders blank.
+**`<Calendar>` must keep its `key={monthKey}`**, which `CalendarBoard` sets. Next does not
+remount on search-param changes, and Calendar seeds its state from `initialEntries` only on
+mount — so without the key, sliding months keeps the previous month's entries and the new
+month renders blank. The active palette mark lives in `CalendarBoard`, above that key, so it
+survives month changes.
 
-`src/components/calendar.tsx` (client) owns the interaction: tapping a weekday cycles
-`null → office → leave → holiday → training → null`, updates local state optimistically,
+`src/components/calendar.tsx` (client) owns the interaction: tapping a weekday applies
+the active palette mark via `applyMark` (tapping a day that already has it clears it; with
+no mark selected nothing changes), updates local state optimistically,
 and calls the `setDayStatus` server action. On rejection it reverts that cell and shows a
 toast. The displayed month is never refetched mid-edit, so **the client recomputes stats
 from local state** with the same `computeMonthStats` the server would use. Keep that
@@ -264,7 +267,7 @@ snapshot, so SSR output stays timezone-independent.
 - `@/*` maps to `src/*` (tsconfig and vitest both).
 - Tailwind v4: the palette and fonts are CSS variables in the `@theme` block of
   `src/app/globals.css` (`paper`, `ink`, `rule`, `stamp`, `leave`, `holiday`, `training`,
-  `fade`). There is no `tailwind.config.*` — add design tokens there, not in a config
+  `credit`, `fade`). There is no `tailwind.config.*` — add design tokens there, not in a config
   file.
 - Vitest runs in a `node` environment; only `src/lib/rto.ts` (pure logic) is unit-tested.
   That is why `monthMeter` and `fyFillPercent` compute their numbers there, and why

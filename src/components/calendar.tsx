@@ -1,29 +1,25 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { setDayStatus } from "@/app/actions";
 import {
+  applyMark,
   computeFyStats,
   computeMonthStats,
   isEligible,
   isMandated,
   isWeekend,
+  tapHint,
   type DayStatus,
   type Entries,
   type FyBaseline,
+  type Mark,
   type WfhMandate,
 } from "@/lib/rto";
+import { MARK_TEXT, MarkIcon } from "@/components/status-icons";
 import { Stats } from "@/components/stats";
 import { Toast } from "@/components/toast";
 import { useToday } from "@/lib/use-today";
-
-const CYCLE: (DayStatus | null)[] = [
-  null,
-  "office",
-  "leave",
-  "holiday",
-  "training",
-];
 
 const STATUS_LABEL: Record<DayStatus | "wfh", string> = {
   wfh: "Work from home",
@@ -49,14 +45,6 @@ function monthGrid(year: number, month: number): (string | null)[][] {
   return weeks;
 }
 
-// Every non-office status needs a colour; a ternary here would quietly paint a
-// new status in the last branch's colour.
-const STATUS_CLASS: Record<Exclude<DayStatus, "office">, string> = {
-  leave: "text-leave",
-  holiday: "text-holiday",
-  training: "text-training",
-};
-
 function DayMark({
   status,
   stamped,
@@ -66,26 +54,24 @@ function DayMark({
   stamped: boolean;
   muted?: boolean;
 }) {
-  const mutedClass = muted ? "opacity-40 line-through" : "";
+  // The text marks this replaced were struck through when muted; line-through
+  // draws nothing on an SVG. The hatch and the aria-label already say "not
+  // counted", so the fade alone quiets the mark.
+  const mutedClass = muted ? "opacity-40" : "";
   if (status === "office") {
     return (
       <span
-        className={`stamp-ring px-2 py-0.5 font-mono text-[10px] font-semibold tracking-widest uppercase ${
-          stamped ? "stamp-in" : ""
-        } ${mutedClass}`}
+        className={`stamp-ring inline-flex p-1 ${stamped ? "stamp-in" : ""} ${mutedClass}`}
       >
-        Office
+        <MarkIcon mark="office" className="size-5" />
       </span>
     );
   }
   return (
-    <span
-      className={`font-mono text-[10px] font-medium tracking-widest uppercase ${
-        STATUS_CLASS[status]
-      } ${mutedClass}`}
-    >
-      {status}
-    </span>
+    <MarkIcon
+      mark={status}
+      className={`size-6 ${MARK_TEXT[status]} ${mutedClass}`}
+    />
   );
 }
 
@@ -98,6 +84,9 @@ export function Calendar({
   targetPercent,
   mandates,
   fyBaseline,
+  mark,
+  palette,
+  onUnmarkedTap,
 }: {
   monthKey: string;
   initialEntries: Entries;
@@ -111,6 +100,12 @@ export function Calendar({
   targetPercent: number;
   mandates: WfhMandate[];
   fyBaseline: FyBaseline | null;
+  /** The active palette mark, held by CalendarBoard above this component's key. */
+  mark: Mark | null;
+  /** The palette, rendered between the stats and the grid. */
+  palette: ReactNode;
+  /** Called when a day is tapped with no mark selected, to pulse the palette. */
+  onUnmarkedTap: () => void;
 }) {
   const [entries, setEntries] = useState<Entries>(initialEntries);
   const [toast, setToast] = useState<string | null>(null);
@@ -159,9 +154,15 @@ export function Calendar({
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   }
 
-  function cycle(date: string) {
+  function tap(date: string) {
+    if (mark === null) {
+      onUnmarkedTap();
+      showToast("Pick a mark above first.");
+      return;
+    }
     const current = entries[date] ?? null;
-    const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
+    const next = applyMark(current, mark);
+    if (next === current) return;
 
     setEntries((prev) => {
       const updated = { ...prev };
@@ -189,6 +190,8 @@ export function Calendar({
   return (
     <div className="space-y-6">
       <Stats stats={stats} fyStats={fyStats} />
+
+      {palette}
 
       <div className="border border-rule bg-white/40">
         <div className={`${gridCols} border-b border-rule`}>
@@ -256,15 +259,15 @@ export function Calendar({
                   <button
                     key={di}
                     type="button"
-                    onClick={() => cycle(date)}
+                    onClick={() => tap(date)}
                     aria-label={
                       mandated
                         ? `${date}: Mandated work from home${
                             status
                               ? `, ${STATUS_LABEL[status]} recorded but not counted`
                               : ""
-                          }. Tap to change.`
-                        : `${date}: ${STATUS_LABEL[status ?? "wfh"]}. Tap to change.`
+                          }. ${tapHint(status, mark)}`
+                        : `${date}: ${STATUS_LABEL[status ?? "wfh"]}. ${tapHint(status, mark)}`
                     }
                     className={`relative flex min-h-16 flex-col items-center justify-center gap-0.5 p-1.5 transition-colors hover:bg-ink/5 ${
                       di > 0 ? "border-l border-rule" : ""
@@ -328,9 +331,9 @@ export function Calendar({
       )}
 
       <p className="text-xs text-fade">
-        Tap a weekday to cycle: work from home → office → leave → holiday →
-        training. Untouched days count as work from home. Hatched days are
-        mandated work from home — they don&apos;t count toward the requirement.
+        Pick a mark, then tap days. Tap a marked day again to clear it.
+        Untouched days count as work from home. Hatched days are mandated work
+        from home — they don&apos;t count toward the requirement.
       </p>
 
       {toast && <Toast message={toast} />}

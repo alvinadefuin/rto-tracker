@@ -33,6 +33,9 @@ import {
   monthMeter,
   priorBalancePoints,
   coveredNote,
+  applyMark,
+  tapHint,
+  type DayStatus,
   type Entries,
   type TargetPeriod,
   type WfhMandate,
@@ -2320,5 +2323,64 @@ describe("formatFinancialYear", () => {
 
   it("works for the year the record began", () => {
     expect(formatFinancialYear(2026)).toBe("FY2026 (Aug 2025 – Jul 2026)");
+  });
+});
+
+describe("applyMark", () => {
+  const statuses: (DayStatus | null)[] = [
+    null,
+    "office",
+    "leave",
+    "holiday",
+    "training",
+  ];
+  const marks: DayStatus[] = ["office", "leave", "holiday", "training"];
+
+  it("leaves every day unchanged when no mark is selected", () => {
+    for (const current of statuses) {
+      expect(applyMark(current, null)).toBe(current);
+    }
+  });
+
+  it("clears every day under erase", () => {
+    for (const current of statuses) {
+      expect(applyMark(current, "erase")).toBeNull();
+    }
+  });
+
+  it("clears a day that already carries the selected mark", () => {
+    for (const mark of marks) {
+      expect(applyMark(mark, mark)).toBeNull();
+    }
+  });
+
+  it("writes the selected mark over any other status", () => {
+    for (const current of statuses) {
+      for (const mark of marks) {
+        if (current === mark) continue;
+        expect(applyMark(current, mark)).toBe(mark);
+      }
+    }
+  });
+});
+
+describe("tapHint", () => {
+  it("asks for a mark when none is selected", () => {
+    expect(tapHint("office", null)).toBe("Pick a mark first.");
+    expect(tapHint(null, null)).toBe("Pick a mark first.");
+  });
+
+  it("names the status a tap would write", () => {
+    expect(tapHint(null, "office")).toBe("Tap to mark office.");
+    expect(tapHint("leave", "training")).toBe("Tap to mark training.");
+  });
+
+  it("says clear when the tap would clear", () => {
+    expect(tapHint("holiday", "holiday")).toBe("Tap to clear.");
+    expect(tapHint("office", "erase")).toBe("Tap to clear.");
+  });
+
+  it("says nothing changes when erasing an empty day", () => {
+    expect(tapHint(null, "erase")).toBe("Nothing to erase.");
   });
 });

@@ -1,7 +1,7 @@
 # Mark palette
 
 **Date:** 2026-11-26
-**Status:** approved
+**Status:** implemented
 
 ## Why
 
@@ -42,11 +42,17 @@ clearing the 4.5:1 text floor its siblings sit at 4.6–5.0). The old slate
 `#5a6b8c` retires. Office stays stamp red — the colour of the day that
 counts — and training stays ochre. Existing leave and holiday rows, imported
 holidays included, change colour; the `@theme` comment records the swap.
+
+`stats.tsx` used `holiday` as its "ahead" green (covered rings, "target
+met"). Those move to a new `credit` token holding the same green, so a
+verdict colour no longer moves with a status colour.
 `fade` (3.36:1) is used only for the Erase button's icon, never as text, and
 never appears in a cell.
 
 The active palette button takes a solid border in its token and a tinted
-background of the same mix; inactive buttons are `ink` on `paper`.
+background of the same mix; its label stays `ink` for contrast at 11px, with
+the icon carrying the token colour. Erase uses `ink` for border and tint.
+Inactive buttons are `ink` on `paper`.
 
 The active mark is `Mark = DayStatus | "erase"`, held as `Mark | null`.
 Tapping the active palette button deselects it; tapping another switches to
@@ -65,7 +71,8 @@ arithmetic:
 
 `Calendar` calls it on every tap. When the result equals `current`, it saves
 nothing and sends no request. With no mark selected, the day does not change:
-the palette pulses once and a toast reads "Pick a mark above first."
+the palette pulses once and a toast reads "Pick a mark above first." Erase on an empty day
+reads "Nothing to erase." (`tapHint`)
 
 **Components.**
 
@@ -73,10 +80,14 @@ the palette pulses once and a toast reads "Pick a mark above first."
   `currentColor` with the tinted fill above, `aria-hidden`. No icon
   dependency, no emoji.
 - `src/components/mark-palette.tsx` — five buttons, icon plus label, each with
-  `aria-pressed`. Stateless: takes `active`, `onSelect` and a `pulse` flag.
+  `aria-pressed`. Stateless: takes `active`, `onSelect`, `pulseKey`, `pulsing` and `onPulseEnd`;
+  root is `role="group"` with an `aria-label`.
 - `src/components/calendar-board.tsx` — new client wrapper. Owns the active
-  mark, the Escape listener and the pulse, renders `<MarkPalette>` and then
-  `<Calendar key={monthKey} …>`. `page.tsx` renders the board instead of the
+  mark, the Escape listener and the pulse state, and renders
+  `<Calendar key={monthKey} …>`, passing the palette in as a `palette` slot
+  that Calendar renders between the stats and the grid. The palette therefore
+  sits inside the keyed subtree; the mark state lives in the board, which is
+  what survives month changes. `page.tsx` renders the board instead of the
   calendar and passes the same props through.
 
 **Why the wrapper.** `<Calendar>` must keep `key={monthKey}`: it seeds its
@@ -87,8 +98,8 @@ moves into the board; its comment in `page.tsx` moves with it.
 
 **Cells.** A marked day shows its icon in the status colour instead of the
 uppercase word. Office keeps the `stamp-ring` and the `stamp-in` animation,
-with the building inside the ring. Mandated days keep `opacity-40
-line-through` on the mark. `aria-label` keeps its current status wording and
+with the building inside the ring. Mandated marks are faded with
+`opacity-40` only — line-through draws nothing on an SVG. `aria-label` keeps its current status wording and
 ends with what a tap will now do, e.g. "Tap to mark office", "Tap to clear",
 or "Pick a mark first", instead of "Tap to change".
 

@@ -20,7 +20,7 @@ No schema change, no migration.
 - Modify: `src/lib/rto.ts` — add directly after `isEligible` (~line 385)
 - Test: `src/lib/rto.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add `applyMark`, `tapHint`, `type DayStatus` (if not already imported) and `type Mark` to the import list at the top of `src/lib/rto.test.ts`, then append:
 
@@ -85,12 +85,12 @@ describe("tapHint", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npx vitest run src/lib/rto.test.ts -t "applyMark|tapHint"`
 Expected: FAIL, `applyMark is not a function` (or an import error).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/lib/rto.ts`, directly after `isEligible`:
 
@@ -126,12 +126,12 @@ export function tapHint(current: DayStatus | null, mark: Mark | null): string {
 
 (`next === current` with a non-null mark can only happen for `"erase"` on an empty day: every other mark either writes a different status or clears a set one.)
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npx vitest run src/lib/rto.test.ts`
 Expected: PASS, all tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/rto.ts src/lib/rto.test.ts
@@ -149,7 +149,7 @@ git commit -m "feat: add the palette's tap rule and its hint"
 - Modify: `src/components/stats.tsx:109` and `:136`
 - Modify: `docs/superpowers/specs/2026-11-26-mark-palette-design.md` — record the `credit` token
 
-- [ ] **Step 1: Retoken `@theme`**
+- [x] **Step 1: Retoken `@theme`**
 
 Replace the `--color-leave` and `--color-holiday` lines with:
 
@@ -165,14 +165,14 @@ Replace the `--color-leave` and `--color-holiday` lines with:
   --color-credit: #3e7a57;
 ```
 
-- [ ] **Step 2: Point `stats.tsx` at `credit`**
+- [x] **Step 2: Point `stats.tsx` at `credit`**
 
 In `src/components/stats.tsx`, change `"border-dashed border-holiday bg-transparent"` to `"border-dashed border-credit bg-transparent"` (line 109) and `"text-holiday"` to `"text-credit"` (line 136).
 
 Run: `grep -rn "holiday" src/components/stats.tsx`
 Expected: no output.
 
-- [ ] **Step 3: Add the icon tint and pulse rules**
+- [x] **Step 3: Add the icon tint and pulse rules**
 
 Append to `src/app/globals.css`, after the `@media (prefers-reduced-motion: reduce) { .stamp-in … }` block:
 
@@ -202,7 +202,7 @@ Append to `src/app/globals.css`, after the `@media (prefers-reduced-motion: redu
 }
 ```
 
-- [ ] **Step 4: Record the token in the spec**
+- [x] **Step 4: Record the token in the spec**
 
 In the spec, append this paragraph after the "Colours follow the icons" paragraph:
 
@@ -212,7 +212,7 @@ met"). Those move to a new `credit` token holding the same green, so a
 verdict colour no longer moves with a status colour.
 ```
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 Run: `make lint`
 Expected: no errors.
@@ -229,7 +229,7 @@ git commit -m "style: recolour leave and holiday; give the year's credit its own
 **Files:**
 - Create: `src/components/status-icons.tsx`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```tsx
 import type { ReactNode } from "react";
@@ -332,7 +332,7 @@ export function MarkIcon({
 
 The holiday glass has its outline drawn as a full bowl, and the tint fills only the lower half, so it reads as wine in a glass.
 
-- [ ] **Step 2: Type-check and commit**
+- [x] **Step 2: Type-check and commit**
 
 Run: `npx tsc --noEmit`
 Expected: no errors.
@@ -349,7 +349,7 @@ git commit -m "feat: draw the five marks as two-tone SVG"
 **Files:**
 - Create: `src/components/mark-palette.tsx`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```tsx
 import type { Mark } from "@/lib/rto";
@@ -417,7 +417,7 @@ export function MarkPalette({
 }
 ```
 
-- [ ] **Step 2: Type-check and commit**
+- [x] **Step 2: Type-check and commit**
 
 Run: `npx tsc --noEmit`
 Expected: no errors.
@@ -438,7 +438,7 @@ git commit -m "feat: add the mark palette toolbar"
 - Create: `src/components/calendar-board.tsx`
 - Modify: `src/app/page.tsx` — import (line 22) and the `<Calendar>` element with its comment (~lines 240–254)
 
-- [ ] **Step 1: Calendar imports and constants**
+- [x] **Step 1: Calendar imports and constants**
 
 In `src/components/calendar.tsx`:
 
@@ -448,7 +448,7 @@ In `src/components/calendar.tsx`:
 - Delete the `CYCLE` constant.
 - Delete the `STATUS_CLASS` constant and its comment. `MARK_TEXT` replaces it.
 
-- [ ] **Step 2: Replace `DayMark`**
+- [x] **Step 2: Replace `DayMark`**
 
 ```tsx
 function DayMark({
@@ -482,7 +482,7 @@ function DayMark({
 }
 ```
 
-- [ ] **Step 3: New props**
+- [x] **Step 3: New props**
 
 Add to the destructured props and their type:
 
@@ -501,7 +501,7 @@ Add to the destructured props and their type:
   onUnmarkedTap: () => void;
 ```
 
-- [ ] **Step 4: Replace `cycle` with `tap`**
+- [x] **Step 4: Replace `cycle` with `tap`**
 
 Replace the whole `cycle` function with:
 
@@ -536,7 +536,7 @@ Replace the whole `cycle` function with:
   }
 ```
 
-- [ ] **Step 5: Render the palette, the tap and the hint**
+- [x] **Step 5: Render the palette, the tap and the hint**
 
 - Directly after `<Stats stats={stats} fyStats={fyStats} />`, add `{palette}`.
 - On the day `<button>`: change `onClick={() => cycle(date)}` to `onClick={() => tap(date)}`.
@@ -565,7 +565,7 @@ Replace the whole `cycle` function with:
 Run: `grep -n "cycle\|CYCLE\|STATUS_CLASS" src/components/calendar.tsx`
 Expected: no output.
 
-- [ ] **Step 6: Create `calendar-board.tsx`**
+- [x] **Step 6: Create `calendar-board.tsx`**
 
 ```tsx
 "use client";
@@ -614,7 +614,7 @@ export function CalendarBoard(props: BoardProps) {
 }
 ```
 
-- [ ] **Step 7: Switch `page.tsx` to the board**
+- [x] **Step 7: Switch `page.tsx` to the board**
 
 In `src/app/page.tsx`:
 
@@ -630,7 +630,7 @@ In `src/app/page.tsx`:
 Run: `grep -n "<Calendar\b\|key={monthKey}" src/app/page.tsx`
 Expected: no output.
 
-- [ ] **Step 8: Update CLAUDE.md**
+- [x] **Step 8: Update CLAUDE.md**
 
 In `CLAUDE.md`:
 
@@ -638,7 +638,7 @@ In `CLAUDE.md`:
 - Leave the rest of that paragraph as it is, then add this sentence after it: "The active palette mark lives in `CalendarBoard`, above that key, so it survives month changes."
 - In the Data flow paragraph, replace "tapping a weekday cycles `null → office → leave → holiday → training → null`" with "tapping a weekday applies the active palette mark via `applyMark` (tapping a day that already has it clears it; with no mark selected nothing changes)".
 
-- [ ] **Step 9: Verify and commit**
+- [x] **Step 9: Verify and commit**
 
 Run: `npx tsc --noEmit && make lint && make test`
 Expected: no type errors, no lint errors, all tests pass.
@@ -652,11 +652,11 @@ git commit -m "feat: mark days from the palette instead of cycling"
 
 ### Task 6: Browser check
 
-- [ ] **Step 1: Run the app**
+- [x] **Step 1: Run the app**
 
 Run `npm run dev` and open http://localhost:3000. If the app serves stale chunks, unregister the old service worker on localhost:3000 first.
 
-- [ ] **Step 2: Walk the spec's checklist**
+- [x] **Step 2: Walk the spec's checklist**
 
 1. Tap a day with no mark selected: the palette pulses, the toast reads "Pick a mark above first.", and nothing is saved (check the Network tab).
 2. Pick Office and tap three days: they stamp in and the stats update.
@@ -671,7 +671,7 @@ Run `npm run dev` and open http://localhost:3000. If the app serves stale chunks
 11. Covered rings and "target met" are still green.
 12. At a 375px width: the palette wraps cleanly and each icon is legible in a cell.
 
-- [ ] **Step 3: Tick the checklist in this plan and commit**
+- [x] **Step 3: Tick the checklist in this plan and commit**
 
 ```bash
 git add docs/superpowers/plans/2026-11-26-mark-palette.md
