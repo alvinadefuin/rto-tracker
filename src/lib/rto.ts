@@ -383,6 +383,34 @@ export function isEligible(
   return status === undefined || ELIGIBLE_BY_STATUS[status];
 }
 
+/** A palette selection: a status to write, or `"erase"` to clear a day. */
+export type Mark = DayStatus | "erase";
+
+/**
+ * What a tap on a weekday writes under the active palette mark. `null` means
+ * WFH — delete the row. With no mark selected nothing changes; tapping a day
+ * that already carries the mark clears it, so Erase is a convenience rather
+ * than the only way back to WFH. Callers save nothing when the result equals
+ * `current`.
+ */
+export function applyMark(
+  current: DayStatus | null,
+  mark: Mark | null
+): DayStatus | null {
+  if (mark === null) return current;
+  if (mark === "erase" || mark === current) return null;
+  return mark;
+}
+
+/** The closing sentence of a day cell's aria-label: what a tap will do. */
+export function tapHint(current: DayStatus | null, mark: Mark | null): string {
+  if (mark === null) return "Pick a mark first.";
+  const next = applyMark(current, mark);
+  if (next === current) return "Nothing to erase.";
+  if (next === null) return "Tap to clear.";
+  return `Tap to mark ${next}.`;
+}
+
 export function computeMonthStats(
   year: number,
   month: number,
