@@ -499,14 +499,17 @@ export function monthMeter(
  * The caption clause naming the covered rings, or null when there are none.
  *
  * The ring row is aria-hidden on the premise that it carries nothing the text
- * does not; covered rings would break that without this. It counts rings, not
- * points, and "1 covered" reads the same as "2 covered", so only the number
- * varies. Copy lives here rather than in the component for the reason
+ * does not; covered rings would break that without this. The clause stands in
+ * for that row, so it counts the dashed rings shown: once stamps overrun the
+ * covered block, those rings are drawn as stamps and leave the count. It counts
+ * rings, not points, and "1 covered" reads the same as "2 covered", so only the
+ * number varies. Copy lives here rather than in the component for the reason
  * fyVerdict's does: Vitest runs without a DOM.
  */
 export function coveredNote(meter: MonthMeter): string | null {
-  if (meter.covered === 0) return null;
-  return `${meter.covered} covered by earlier months' surplus`;
+  const shown = Math.min(meter.covered, meter.slots - meter.filled);
+  if (shown <= 0) return null;
+  return `${shown} covered by earlier months' surplus`;
 }
 
 export interface MonthsAggregate {

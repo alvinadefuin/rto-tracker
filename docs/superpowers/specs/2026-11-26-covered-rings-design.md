@@ -1,7 +1,7 @@
 # Covered rings
 
 **Date:** 2026-11-26
-**Status:** approved, not yet implemented
+**Status:** implemented
 
 ## Why
 
@@ -85,6 +85,9 @@ gains a clause when `covered > 0`:
 The count is of rings, not points, and "1 covered …" reads the same as the
 plural, so only the number varies. The clause is built by a function in `rto.ts`, not in JSX,
 so it can be asserted.
+
+The clause counts the dashed rings shown, so stamps that overrun the covered
+block reduce it.
 
 ## Code
 

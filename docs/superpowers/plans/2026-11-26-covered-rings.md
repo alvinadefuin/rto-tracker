@@ -20,7 +20,7 @@ No schema change, no migration.
 - Modify: `src/lib/rto.ts` — `MonthMeter` and `monthMeter` (~lines 444–478); add `priorBalancePoints` directly after `computeFyStats` (~line 637); add `coveredNote` directly after `monthMeter`.
 - Test: `src/lib/rto.test.ts` — import list (lines 2–41); the existing `describe("monthMeter")` (~lines 1773–1929); new describe blocks after it.
 
-- [ ] **Step 1: Add `covered: 0` to every existing `monthMeter` expectation**
+- [x] **Step 1: Add `covered: 0` to every existing `monthMeter` expectation**
 
 The eight `expect(monthMeter(s)).toEqual({ … })` objects in `describe("monthMeter")` gain a fifth field. `toEqual` fails on an extra property, so without this they break the moment `covered` exists — and none of them passes a prior balance, so `0` is correct for all of them. In each, after the `extra:` line add:
 
@@ -30,7 +30,7 @@ The eight `expect(monthMeter(s)).toEqual({ … })` objects in `describe("monthMe
 
 The eight `extra:` lines are at roughly 1822, 1835, 1850, 1863, 1875, 1883, 1905 and 1927 (`grep -n "extra: " src/lib/rto.test.ts`).
 
-- [ ] **Step 2: Import the new functions in the test file**
+- [x] **Step 2: Import the new functions in the test file**
 
 In the import list in `src/lib/rto.test.ts`, after `monthMeter,` add:
 
@@ -39,7 +39,7 @@ In the import list in `src/lib/rto.test.ts`, after `monthMeter,` add:
   coveredNote,
 ```
 
-- [ ] **Step 3: Write the failing tests**
+- [x] **Step 3: Write the failing tests**
 
 Append after the closing `});` of `describe("monthMeter")` (before `describe("the financial year sums fractional months without rounding"`):
 
@@ -190,12 +190,12 @@ describe("coveredNote", () => {
 });
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [x] **Step 4: Run the tests to verify they fail**
 
 Run: `npx vitest run src/lib/rto.test.ts`
 Expected: FAIL — the eight existing `monthMeter` cases fail on the missing `covered` property, and the new blocks fail because `priorBalancePoints` and `coveredNote` are not exported (`is not a function`).
 
-- [ ] **Step 5: Extend `MonthMeter` and `monthMeter`**
+- [x] **Step 5: Extend `MonthMeter` and `monthMeter`**
 
 In `src/lib/rto.ts`, replace the `MonthMeter` interface with:
 
@@ -260,7 +260,7 @@ export function coveredNote(meter: MonthMeter): string | null {
 }
 ```
 
-- [ ] **Step 6: Add `priorBalancePoints`**
+- [x] **Step 6: Add `priorBalancePoints`**
 
 Directly after the closing `}` of `computeFyStats`, add:
 
@@ -278,7 +278,7 @@ export function priorBalancePoints(fy: FyStats, month: MonthStats): number {
 }
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `npx vitest run src/lib/rto.test.ts`
 Expected: PASS, all cases.
@@ -286,7 +286,7 @@ Expected: PASS, all cases.
 Then the whole suite and types: `make test && npx tsc --noEmit`
 Expected: PASS, no type errors. (`stats.tsx` still compiles: the new argument is optional and the new field is simply unread.)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/lib/rto.ts src/lib/rto.test.ts
@@ -302,7 +302,7 @@ git commit -m "feat: count the rings a prior surplus covers"
 
 No unit test: Vitest runs in `node` and cannot render this component. The ring rules here (a stamp beats a cover; covered rings at the right end; no partial gradient on a covered ring) are verified in the browser, like the existing partial-ring rule.
 
-- [ ] **Step 1: Import the new functions**
+- [x] **Step 1: Import the new functions**
 
 ```ts
 import {
@@ -320,7 +320,7 @@ import {
 } from "@/lib/rto";
 ```
 
-- [ ] **Step 2: Update the header comment**
+- [x] **Step 2: Update the header comment**
 
 Replace the three-line comment above `export function Stats` with:
 
@@ -331,7 +331,7 @@ Replace the three-line comment above `export function Stats` with:
 // are drawn dashed — with the financial year's running position underneath.
 ```
 
-- [ ] **Step 3: Pass the prior balance and take the new values**
+- [x] **Step 3: Pass the prior balance and take the new values**
 
 Replace:
 
@@ -350,7 +350,7 @@ with:
   const covers = coveredNote(meter);
 ```
 
-- [ ] **Step 4: Draw the third ring state**
+- [x] **Step 4: Draw the third ring state**
 
 Replace the body of the `Array.from({ length: slots }, (_, i) => { … })` callback with:
 
@@ -389,7 +389,7 @@ Replace the body of the `Array.from({ length: slots }, (_, i) => { … })` callb
             );
 ```
 
-- [ ] **Step 5: Append the clause to the caption**
+- [x] **Step 5: Append the clause to the caption**
 
 In the caption paragraph, replace:
 
@@ -404,7 +404,7 @@ with:
         {covers && <> · {covers}</>}.
 ```
 
-- [ ] **Step 6: Type-check, lint, test, build**
+- [x] **Step 6: Type-check, lint, test, build**
 
 Run: `npx tsc --noEmit && make lint && make test && npm run build`
 Expected: all pass.
@@ -421,7 +421,7 @@ Check, on the dev branch's data:
 
 If the data lacks a surplus month, stamp extra days in an earlier month of the FY to create one, then undo them afterwards.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/components/stats.tsx

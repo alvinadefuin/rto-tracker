@@ -53,6 +53,12 @@ Rejected alternatives:
 - Two "to go" numbers are on screen: the month's own, and the year's. Deliberate. The
   rings keep the month's truth; the FY sentence is the actionable one, and the month's
   shortfall loses its alarm colour when the bank already covers it.
+  **Amended 2026-11-26:** unstamped rings that a surplus from earlier in the year
+  already settles are now drawn as covered (dashed, holiday green, at the right end
+  of the row; a stamp beats a cover). Stamps, the stamped count and the month's
+  requirement still describe the month alone; with a prior surplus the row
+  completes exactly when the year owes nothing. See
+  `docs/superpowers/specs/2026-11-26-covered-rings-design.md`.
 - Per-month figures no longer sum to the FY figure, because the year rounds once. The FY
   line is authoritative.
   **Amended 2026-09-01 by ADR 0007:** the year no longer rounds, so per-month

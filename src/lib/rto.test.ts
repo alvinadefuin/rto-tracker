@@ -2077,10 +2077,10 @@ describe("priorBalancePoints", () => {
 });
 
 describe("coveredNote", () => {
-  const meter = (covered: number) => ({
+  const meter = (covered: number, filled = 0) => ({
     slots: 9,
     partialSlot: 80,
-    filled: 0,
+    filled,
     extra: 0,
     covered,
   });
@@ -2092,6 +2092,11 @@ describe("coveredNote", () => {
   it("counts the covered rings", () => {
     expect(coveredNote(meter(1))).toBe("1 covered by earlier months' surplus");
     expect(coveredNote(meter(2))).toBe("2 covered by earlier months' surplus");
+  });
+
+  it("counts only the dashed rings once stamps overrun the covered block", () => {
+    expect(coveredNote(meter(2, 8))).toBe("1 covered by earlier months' surplus");
+    expect(coveredNote(meter(2, 9))).toBeNull();
   });
 });
 
