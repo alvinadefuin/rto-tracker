@@ -17,10 +17,13 @@ type BoardProps = Omit<
 export function CalendarBoard(props: BoardProps) {
   const [mark, setMark] = useState<Mark | null>(null);
   const [pulseKey, setPulseKey] = useState(0);
+  const [pulsing, setPulsing] = useState(false);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setMark(null);
+      if (e.key === "Escape" && !e.defaultPrevented && !e.isComposing) {
+        setMark(null);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -35,9 +38,18 @@ export function CalendarBoard(props: BoardProps) {
       key={props.monthKey}
       {...props}
       mark={mark}
-      onUnmarkedTap={() => setPulseKey((k) => k + 1)}
+      onUnmarkedTap={() => {
+        setPulseKey((k) => k + 1);
+        setPulsing(true);
+      }}
       palette={
-        <MarkPalette active={mark} onSelect={setMark} pulseKey={pulseKey} />
+        <MarkPalette
+          active={mark}
+          onSelect={setMark}
+          pulseKey={pulseKey}
+          pulsing={pulsing}
+          onPulseEnd={() => setPulsing(false)}
+        />
       }
     />
   );
