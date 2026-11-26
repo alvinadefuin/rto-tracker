@@ -440,7 +440,7 @@ export function computeMonthStats(
   };
 }
 
-/** The four numbers the month's stamp-card meter is drawn from. */
+/** The five numbers the month's stamp-card meter is drawn from. */
 export interface MonthMeter {
   slots: number; // whole rings; the requirement rounded up
   partialSlot: number; // 0..99 — the last ring's worth, 0 when the requirement is whole
@@ -466,7 +466,6 @@ export interface MonthMeter {
  * `slots` rounds the requirement up, that can never overstate what the year
  * will grant: a month over-served by 1.8 days reports +1, and the year settles
  * the rest. Do not "fix" it into formatDays(officeDays * 100 − requiredPoints).
-
  *
  * `covered` is how many rings, counted from the right, a surplus banked in the
  * year's earlier months already settles: the row minus the whole stamps this

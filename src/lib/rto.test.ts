@@ -1993,14 +1993,6 @@ describe("monthMeter covered rings", () => {
     });
   });
 
-  it("does not move as this month is stamped", () => {
-    // Covered is fixed by the prior balance; stamps fill from the left and
-    // the component lets a stamp beat a cover, so the count itself is stable.
-    for (let office = 0; office <= 9; office++) {
-      expect(monthMeter(owing(880, office), 140).covered).toBe(1);
-    }
-  });
-
   // The property the formula exists for: with a non-negative prior balance,
   // the rings complete exactly when the year stops owing — which is when
   // MonthBlock's owedForYear greys this month's "to go".
@@ -2049,6 +2041,25 @@ describe("priorBalancePoints", () => {
     );
     // 23 × 100 − 1720 = 580: Aug–Sep banked 5.8 days.
     expect(priorBalancePoints(fy, october)).toBe(580);
+  });
+
+  it("stays fixed as the displayed month is stamped", () => {
+    // This is what keeps covered rings from shifting under a tap.
+    const days = monthWeekdays(2026, 10);
+    for (let office = 0; office <= days.length; office++) {
+      const entries: Entries = {};
+      for (const day of days.slice(0, office)) entries[day] = "office";
+      const month = computeMonthStats(2026, 10, entries, 40);
+      const fy = computeFyStats(
+        "2026-10",
+        {
+          windowStartMonth: "2026-08",
+          prior: { officeDays: 23, weightedEligible: 1720 },
+        },
+        month
+      );
+      expect(priorBalancePoints(fy, month)).toBe(580);
+    }
   });
 
   it("is negative when the earlier months fell short", () => {
