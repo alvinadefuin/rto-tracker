@@ -267,7 +267,7 @@ snapshot, so SSR output stays timezone-independent.
 - `@/*` maps to `src/*` (tsconfig and vitest both).
 - Tailwind v4: the palette and fonts are CSS variables in the `@theme` block of
   `src/app/globals.css` (`paper`, `ink`, `rule`, `stamp`, `leave`, `holiday`, `training`,
-  `fade`). There is no `tailwind.config.*` — add design tokens there, not in a config
+  `credit`, `fade`). There is no `tailwind.config.*` — add design tokens there, not in a config
   file.
 - Vitest runs in a `node` environment; only `src/lib/rto.ts` (pure logic) is unit-tested.
   That is why `monthMeter` and `fyFillPercent` compute their numbers there, and why

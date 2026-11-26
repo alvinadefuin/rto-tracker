@@ -66,9 +66,10 @@ parsing of strings — UTC component math only, to avoid timezone drift).
 
 Server component (`page.tsx`) authenticates via `auth()`, queries the month's
 entries for the session user, computes stats, renders. The calendar is a client
-component: tapping a weekday cycles WFH → Office → Leave → Holiday → Training →
-WFH, updates optimistically, and persists via the `setDayStatus` server action
-(upsert, or delete when cycling back to WFH). On failure the cell reverts and a
+component: pick a mark from the palette, then tap weekdays to apply it; tapping a
+day already carrying the mark (or using Erase) clears it. Taps update
+optimistically and persist via the `setDayStatus` server action (upsert, or
+delete when clearing back to WFH). On failure the cell reverts and a
 toast is shown.
 
 The page also loads the FY-to-date window — entries and mandates from the FY's first
