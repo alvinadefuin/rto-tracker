@@ -446,6 +446,7 @@ export interface MonthMeter {
   partialSlot: number; // 0..99 — the last ring's worth, 0 when the requirement is whole
   filled: number; // rings stamped
   extra: number; // whole rings of surplus past the row
+  covered: number; // rings at the row's right end the year's prior surplus settles
 }
 
 /**
@@ -465,16 +466,48 @@ export interface MonthMeter {
  * `slots` rounds the requirement up, that can never overstate what the year
  * will grant: a month over-served by 1.8 days reports +1, and the year settles
  * the rest. Do not "fix" it into formatDays(officeDays * 100 − requiredPoints).
+
+ *
+ * `covered` is how many rings, counted from the right, a surplus banked in the
+ * year's earlier months already settles: the row minus the whole stamps this
+ * month still needs for the year to stay level. It is not
+ * floor(priorBalancePoints / 100) — that would leave a 0.8 surplus unable to
+ * cover the 0.8 ring it exactly pays for. Computed this way, with a prior
+ * balance ≥ 0, `filled + covered ≥ slots` holds exactly when the year owes
+ * nothing, which is when MonthBlock's owedForYear greys "to go". The outer
+ * max(0, …) is load-bearing: a prior deficit makes "still needed" exceed the
+ * row. Covered rings are not stamps and never touch `filled` or `extra`.
  */
-export function monthMeter(stats: MonthStats): MonthMeter {
+export function monthMeter(
+  stats: MonthStats,
+  priorBalance = 0
+): MonthMeter {
   const { requiredPoints, officeDays } = stats;
   const slots = Math.ceil(requiredPoints / 100);
+  const stillNeeded = Math.ceil(
+    Math.max(0, requiredPoints - priorBalance) / 100
+  );
   return {
     slots,
     partialSlot: requiredPoints % 100,
     filled: Math.min(officeDays, slots),
     extra: Math.max(0, officeDays - slots),
+    covered: Math.max(0, slots - stillNeeded),
   };
+}
+
+/**
+ * The caption clause naming the covered rings, or null when there are none.
+ *
+ * The ring row is aria-hidden on the premise that it carries nothing the text
+ * does not; covered rings would break that without this. It counts rings, not
+ * points, and "1 covered" reads the same as "2 covered", so only the number
+ * varies. Copy lives here rather than in the component for the reason
+ * fyVerdict's does: Vitest runs without a DOM.
+ */
+export function coveredNote(meter: MonthMeter): string | null {
+  if (meter.covered === 0) return null;
+  return `${meter.covered} covered by earlier months' surplus`;
 }
 
 export interface MonthsAggregate {
@@ -634,6 +667,18 @@ export function computeFyStats(
     balancePoints,
     remainingNeededPoints: Math.max(0, -balancePoints),
   };
+}
+
+/**
+ * The year's balance before the displayed month, in percent-points: the
+ * displayed month's own contribution taken back out of `balancePoints`. It
+ * equals `prior.officeDays × 100 − prior.weightedEligible` from the baseline,
+ * derived from what `Stats` already receives so no prop is added for it.
+ * Stamping the displayed month moves both terms equally, so it is fixed for the
+ * month — the covered rings it drives never shift under a tap.
+ */
+export function priorBalancePoints(fy: FyStats, month: MonthStats): number {
+  return fy.balancePoints - (month.officeDays * 100 - month.requiredPoints);
 }
 
 /**

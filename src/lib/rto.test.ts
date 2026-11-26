@@ -31,6 +31,8 @@ import {
   fyVerdict,
   fyCarryNote,
   monthMeter,
+  priorBalancePoints,
+  coveredNote,
   type Entries,
   type TargetPeriod,
   type WfhMandate,
@@ -1820,6 +1822,7 @@ describe("monthMeter", () => {
       partialSlot: 20,
       filled: 5,
       extra: 0,
+      covered: 0,
     });
   });
 
@@ -1833,6 +1836,7 @@ describe("monthMeter", () => {
       partialSlot: 20,
       filled: 6,
       extra: 0,
+      covered: 0,
     });
   });
 
@@ -1848,6 +1852,7 @@ describe("monthMeter", () => {
       partialSlot: 20,
       filled: 6,
       extra: 1,
+      covered: 0,
     });
   });
 
@@ -1861,6 +1866,7 @@ describe("monthMeter", () => {
       partialSlot: 0,
       filled: 0,
       extra: 0,
+      covered: 0,
     });
   });
 
@@ -1873,6 +1879,7 @@ describe("monthMeter", () => {
       partialSlot: 80,
       filled: 0,
       extra: 0,
+      covered: 0,
     });
     // One stamp fills that row outright, and the 0.2 of a day it over-serves
     // is not a whole ring — so nothing is reported as extra.
@@ -1881,6 +1888,7 @@ describe("monthMeter", () => {
       partialSlot: 80,
       filled: 1,
       extra: 0,
+      covered: 0,
     });
   });
 
@@ -1903,6 +1911,7 @@ describe("monthMeter", () => {
       partialSlot: 0,
       filled: 0,
       extra: 0,
+      covered: 0,
     });
   });
 
@@ -1925,7 +1934,153 @@ describe("monthMeter", () => {
       partialSlot: 0,
       filled: 0,
       extra: 3,
+      covered: 0,
     });
+  });
+});
+
+describe("monthMeter covered rings", () => {
+  // Only requiredPoints and officeDays are read. remainingPoints is kept
+  // consistent with them so the fixture cannot describe a month that
+  // computeMonthStats could never produce; the rest is filler.
+  function owing(requiredPoints: number, officeDays = 0): MonthStats {
+    return {
+      eligibleDays: 22,
+      officeDays,
+      requiredPoints,
+      remainingPoints: Math.max(0, requiredPoints - officeDays * 100),
+      targetPercent: 40,
+      achievedPercent: 0,
+      mandatedDays: 0,
+      weeks: [],
+    };
+  }
+
+  // 8.8 days owed is nine rings, the last worth 0.8. Each row is the spec's
+  // table: covered = slots − the whole stamps still needed for the year to
+  // stay level, never floor(surplus) — that would leave a 0.8 surplus unable
+  // to cover a 0.8 ring.
+  it.each([
+    [80, 1], // 800 still needed → 8 stamps
+    [140, 1], // 740 → 8
+    [200, 2], // 680 → 7
+    [20, 0], // 860 → 9
+    [1000, 9], // the surplus outsizes the month
+    [0, 0], // level coming in
+  ])("a prior balance of %i points covers %i of 8.8's nine rings", (prior, covered) => {
+    expect(monthMeter(owing(880), prior)).toEqual({
+      slots: 9,
+      partialSlot: 80,
+      filled: 0,
+      extra: 0,
+      covered,
+    });
+  });
+
+  it("never reports a negative count for a prior deficit", () => {
+    // 3 days behind: 1180 still needed is twelve stamps against nine rings.
+    // The deficit adds no rings and covers none.
+    expect(monthMeter(owing(880), -300).covered).toBe(0);
+  });
+
+  it("covers nothing when the month asks for nothing", () => {
+    expect(monthMeter(owing(0), 500)).toEqual({
+      slots: 0,
+      partialSlot: 0,
+      filled: 0,
+      extra: 0,
+      covered: 0,
+    });
+  });
+
+  it("does not move as this month is stamped", () => {
+    // Covered is fixed by the prior balance; stamps fill from the left and
+    // the component lets a stamp beat a cover, so the count itself is stable.
+    for (let office = 0; office <= 9; office++) {
+      expect(monthMeter(owing(880, office), 140).covered).toBe(1);
+    }
+  });
+
+  // The property the formula exists for: with a non-negative prior balance,
+  // the rings complete exactly when the year stops owing — which is when
+  // MonthBlock's owedForYear greys this month's "to go".
+  it("completes the row exactly when the year is level or ahead", () => {
+    for (const required of [0, 80, 520, 800, 880, 1100]) {
+      for (const prior of [0, 20, 80, 100, 140, 200, 520, 1000]) {
+        for (let office = 0; office <= 12; office++) {
+          const month = owing(required, office);
+          const fy = computeFyStats(
+            "2026-10",
+            {
+              windowStartMonth: "2026-08",
+              prior: { officeDays: 20, weightedEligible: 2000 - prior },
+            },
+            month
+          );
+          const { filled, covered, slots } = monthMeter(month, prior);
+          expect(filled + covered >= slots).toBe(
+            fy.remainingNeededPoints === 0
+          );
+        }
+      }
+    }
+  });
+});
+
+describe("priorBalancePoints", () => {
+  it("recovers the balance of the months before the displayed one", () => {
+    // Oct 2026 has 22 weekdays; with 4 stamps against 22 × 40% = 880 points.
+    const october = computeMonthStats(
+      2026,
+      10,
+      {
+        "2026-10-01": "office",
+        "2026-10-02": "office",
+        "2026-10-05": "office",
+        "2026-10-06": "office",
+      },
+      40
+    );
+    const prior: MonthsAggregate = { officeDays: 23, weightedEligible: 1720 };
+    const fy = computeFyStats(
+      "2026-10",
+      { windowStartMonth: "2026-08", prior },
+      october
+    );
+    // 23 × 100 − 1720 = 580: Aug–Sep banked 5.8 days.
+    expect(priorBalancePoints(fy, october)).toBe(580);
+  });
+
+  it("is negative when the earlier months fell short", () => {
+    const october = computeMonthStats(2026, 10, {}, 40);
+    const fy = computeFyStats(
+      "2026-10",
+      {
+        windowStartMonth: "2026-08",
+        prior: { officeDays: 15, weightedEligible: 1720 },
+      },
+      october
+    );
+    expect(priorBalancePoints(fy, october)).toBe(-220);
+  });
+});
+
+describe("coveredNote", () => {
+  const meter = (covered: number) => ({
+    slots: 9,
+    partialSlot: 80,
+    filled: 0,
+    extra: 0,
+    covered,
+  });
+
+  it("says nothing when no ring is covered", () => {
+    expect(coveredNote(meter(0))).toBeNull();
+  });
+
+  it("counts the covered rings", () => {
+    expect(coveredNote(meter(1))).toBe("1 covered by earlier months' surplus");
+    expect(coveredNote(meter(2))).toBe("2 covered by earlier months' surplus");
   });
 });
 
