@@ -409,7 +409,7 @@ with:
 Run: `npx tsc --noEmit && make lint && make test && npm run build`
 Expected: all pass.
 
-- [ ] **Step 7: Check it in the browser**
+- [x] **Step 7: Check it in the browser**
 
 Run `npm run dev` and open http://localhost:3000. If the page shows stale behaviour, unregister the service worker for localhost:3000 in DevTools → Application first; it serves cached chunks.
 
