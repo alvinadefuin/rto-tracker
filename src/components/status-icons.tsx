@@ -28,12 +28,15 @@ const PATHS: Record<Mark, ReactNode> = {
   ),
   leave: (
     <>
+      {/* A coconut palm: leave reads as vacation. */}
       <path
         className="icon-tint"
-        d="M12 3a5 5 0 0 0-4.6 7A4 4 0 0 0 9 17h6a4 4 0 0 0 1.6-7A5 5 0 0 0 12 3z"
+        d="M13 9C10 6.5 6 6.8 3.5 10.5 6.5 8.8 9.8 8.6 13 9zM13 9c2.7-2.3 6-2 8.5 1.5-2.8-1.6-5.7-1.8-8.5-1.5zM13 9c-1-3-3.8-5-7-5 3 .9 5.3 2.7 7 5zM13 9c1-3 3.5-4.8 6.5-4.5-2.8 1-4.9 2.4-6.5 4.5z"
       />
-      <path d="M12 21v-9M12 14.5l-2.5-2.5M12 13l2-2" />
-      <path d="M8 21h8" />
+      <circle className="icon-tint" cx="12.2" cy="10.5" r=".8" />
+      <circle className="icon-tint" cx="14" cy="10.4" r=".8" />
+      <path d="M10 21c1.6-3.6 2.7-7.4 3-12" />
+      <path d="M6 21h9" />
     </>
   ),
   holiday: (

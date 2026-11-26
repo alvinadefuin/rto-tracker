@@ -25,7 +25,7 @@ the arithmetic are untouched. No migration, no ADR.
 | Mark     | Icon        | Colour token           | Writes       |
 |----------|-------------|------------------------|--------------|
 | Office   | building    | `stamp` `#be3b2e`      | `"office"`   |
-| Leave    | tree        | `leave` → `#3e7a57`    | `"leave"`    |
+| Leave    | coconut palm| `leave` → `#3e7a57`    | `"leave"`    |
 | Holiday  | wine glass  | `holiday` → `#8a3a5c`  | `"holiday"`  |
 | Training | book        | `training` `#8a6220`   | `"training"` |
 | Erase    | eraser      | `fade` `#82877d`       | `null`       |
@@ -36,7 +36,7 @@ in its token and a fill of `color-mix(in srgb, <token> 18%, transparent)`, so
 it reads as a small illustration rather than a line icon. If the fill muddies
 at cell size, drop it in cells and keep it in the palette.
 
-**Colours follow the icons.** A tree reads green, so `leave` takes the green
+**Colours follow the icons.** A palm reads green, so `leave` takes the green
 `holiday` had; `holiday` becomes a wine plum, `#8a3a5c` (6.75:1 on `paper`,
 clearing the 4.5:1 text floor its siblings sit at 4.6–5.0). The old slate
 `#5a6b8c` retires. Office stays stamp red — the colour of the day that
